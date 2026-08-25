@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 
 from build_features import DATA, RESULTS, _require
-from train_gb import train
+from train_gb import VARIANTS, train_for_projection
 
 KEY_COLS = ["Entity", "EntityLabel", "Green", "Scenario", "Component", "Date", "SSP"]
 
@@ -172,7 +172,12 @@ def energy_sign_check(merged):
 
 
 def main():
-    data = train()
+    # The projection uses FIT B, the 237-month refit, as s3_K62_leaf10.m does.
+    # FIT A stops in 2020 and is only there to certify the out-of-sample metrics.
+    data = train_for_projection()
+    print(f"FIT B: {data['x_fit'].shape[0]} rows = 22 x "
+          f"{data['x_fit'].shape[0] // 22} months, {VARIANTS[data['variant']]}")
+
     predictions = predict_scenarios(data["model"], data["x_fit"].columns)
     replication = log_ratio(predictions)
 
@@ -191,11 +196,18 @@ def main():
     check = energy_sign_check(merged)
     print("\nEnergy, transition component, December 2050:")
     print(check.to_string(index=False))
-    if check["SameSign"].all():
-        print("\nSign reversal reproduced: same sign as the thesis in all five scenarios.")
-    else:
+
+    energy = merged[(merged["Sector"] == "ENRG") & (merged["Component"] == "transition")]
+    spread = float(energy["LogRatioReplication"].max() - energy["LogRatioReplication"].min())
+    thesis_spread = float(energy["LogRatioThesis"].max() - energy["LogRatioThesis"].min())
+    print(f"\nspread across scenarios: {spread:.6f}   thesis {thesis_spread:.6f}")
+
+    deviation = (merged["LogRatioReplication"] - merged["LogRatioThesis"]).abs()
+    print(f"largest deviation at 2050 over {len(merged)} values: {deviation.max():.3e}")
+
+    if not check["SameSign"].all():
         failed = check.loc[~check["SameSign"], "Scenario"].tolist()
-        print(f"\nSign reversal NOT fully reproduced. Scenarios that differ in sign: {failed}")
+        print(f"Scenarios whose sign differs from the thesis: {failed}")
 
 
 if __name__ == "__main__":
