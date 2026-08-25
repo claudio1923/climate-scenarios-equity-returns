@@ -9,16 +9,18 @@ thesis does:
     cumulative index   = prod(1 + r_t / 100)
     log-ratio (sector) = log(cum of the Green portfolio) - log(cum of the Brown one)
 
-One difference from the thesis, stated explicitly because it matters: the design
-file carries no scenario risk-free path, so the compounding here uses the excess
-return (yhat) whereas the thesis compounds yhat + RF. The risk-free component is
-common to the Green and the Brown leg of a sector, so it nearly cancels in the
-log-ratio; levels can shift slightly, the shape of the trajectories and the
-ranking across scenarios do not.
+Compounding uses the total return, exactly as s3_K62_leaf10.m does:
 
-"Current Policies" appears in the design file with the physical component only
-and is not part of the five-scenario set reported in the thesis, so it is
-projected but left out of the comparison table.
+    total = yhat + RF
+
+scenario_design_K62.csv carries no risk-free column, so the path is joined from
+results/scenario_monthly_predictions.csv, where RF is constant across entities
+within a Scenario x Component x month. The risk-free leg is not optional and not
+a refinement: leaving it out changes the log-ratio.
+
+"Current Policies" appears in the design file with the physical component only.
+It carries no risk-free path and is not part of the five-scenario set reported in
+the thesis, so it is dropped before compounding, as s3_K62_leaf10.m does.
 """
 
 from pathlib import Path
@@ -30,6 +32,9 @@ from build_features import DATA, RESULTS, _require
 from train_gb import train
 
 KEY_COLS = ["Entity", "EntityLabel", "Green", "Scenario", "Component", "Date", "SSP"]
+
+# Scenarios projected but not reported: they have no risk-free path.
+REFERENCE_SCENARIOS = ("current policies", "baseline")
 
 THESIS_SCENARIOS = [
     "Net Zero 2050",
@@ -56,13 +61,51 @@ def predict_scenarios(model, feature_names, design=None):
     return design
 
 
-def log_ratio(predictions):
+def load_risk_free():
     """
-    Compound each portfolio, then take the within-sector Green/Brown log-ratio.
-    Returns a long frame: Scenario, Component, Sector, Date, LogRatio.
+    The scenario risk-free path, keyed by Scenario x Component x month.
+
+    RF does not vary across entities inside one of those cells, so the join key
+    carries no Entity.
     """
-    frame = predictions.sort_values(["Scenario", "Component", "EntityLabel", "Date"]).copy()
-    frame["Cum"] = frame.groupby(["Scenario", "Component", "EntityLabel"])["yhat"].transform(
+    predictions = pd.read_csv(_require(RESULTS / "scenario_monthly_predictions.csv"))
+    predictions["Date"] = pd.to_datetime(predictions["Date"], format="%d-%b-%Y")
+    path = predictions[["Scenario", "Component", "Date", "RF"]].drop_duplicates()
+    duplicated = path.duplicated(["Scenario", "Component", "Date"]).sum()
+    assert duplicated == 0, f"RF is not unique in {duplicated} Scenario/Component/month cells"
+    return path
+
+
+def log_ratio(predictions, risk_free=None):
+    """
+    Compound each portfolio on the total return, then take the within-sector
+    Green/Brown log-ratio. Returns Scenario, Component, Sector, Date, LogRatio.
+
+    Follows s3_K62_leaf10.m: total = yhat + RF, compounded, then the log-ratio.
+    """
+    risk_free = load_risk_free() if risk_free is None else risk_free
+
+    # Reference scenarios carry no risk-free path and are not part of the five
+    # reported in the thesis; s3_K62_leaf10.m drops them before compounding.
+    lowered = predictions["Scenario"].str.lower()
+    is_reference = np.zeros(len(predictions), dtype=bool)
+    for token in REFERENCE_SCENARIOS:
+        is_reference |= lowered.str.contains(token, regex=False).to_numpy()
+    predictions = predictions.loc[~is_reference]
+
+    before = len(predictions)
+    frame = predictions.merge(risk_free, on=["Scenario", "Component", "Date"], how="left")
+    assert len(frame) == before, "the risk-free join duplicated rows"
+    missing = int(frame["RF"].isna().sum())
+    if missing:
+        raise ValueError(
+            f"no risk-free path for {missing} scenario rows; "
+            "the projection cannot be compounded without it"
+        )
+
+    frame["total"] = frame["yhat"] + frame["RF"]
+    frame = frame.sort_values(["Scenario", "Component", "EntityLabel", "Date"])
+    frame["Cum"] = frame.groupby(["Scenario", "Component", "EntityLabel"])["total"].transform(
         lambda s: (1 + s / 100).cumprod()
     )
 
