@@ -37,6 +37,13 @@ from matlab_policy_gb import MatlabPolicyGB  # noqa: E402
 from scenarios import THESIS_SCENARIOS, load_design, load_risk_free, log_ratio  # noqa: E402
 
 LEVELS = [1e-14, 1e-13, 1e-12, 1e-10]
+
+# A finer sweep down to the last representable bit. At 1e-16, below the double
+# epsilon of 2.2e-16, only about a fifth of the non-zero cells change at all,
+# and each by a single unit in the last place.
+NEAR_EPSILON_LEVELS = [1e-16, 1e-15]
+NEAR_EPSILON_SEED_BASE = 90_000
+
 DRAWS = 8
 END = pd.Timestamp("2050-12-31")
 TARGET = "R_WTI_L1_x_Entity_6"
@@ -85,6 +92,40 @@ def summarise(model, curve, target_index):
     }
 
 
+def sweep(x_base, y, design, columns, risk_free, target_index, levels,
+          seed_base, seed_step):
+    """Refit and reproject once per draw, over a list of noise magnitudes."""
+    rows = []
+    for level_index, level in enumerate(levels):
+        print(f"\nrelative noise {level:.0e}")
+        for draw in range(DRAWS):
+            seed = seed_base + seed_step * level_index + draw
+            generator = np.random.default_rng(seed)
+            # Relative noise: structural zeros are left alone by construction.
+            noise = generator.uniform(-1.0, 1.0, size=x_base.shape)
+
+            model = MatlabPolicyGB(**GB).fit(x_base * (1.0 + level * noise), y)
+            curve = energy_curve(model, design, columns, risk_free)
+            record = summarise(model, curve, target_index)
+            rows.append({"level": level, "draw": draw, "seed": seed, **record})
+            print(f"  draw {draw}: spread {record['spread']:.6f}  signs {record['signs']}  "
+                  f"in-window {record['splits_in_window']}")
+    return rows
+
+
+def report(table, baseline, label):
+    """One block of the summary: dispersion and how often the reading survives."""
+    print(f"\n  {label}")
+    print(f"  {'noise':>8} {'mean':>10} {'sd':>10} {'min':>10} {'max':>10} "
+          f"{'signs kept':>11} {'order kept':>11}")
+    for level, block in table.groupby("level"):
+        signs_kept = int((block["signs"] == baseline["signs"]).sum())
+        order_kept = int((block["order"] == baseline["order"]).sum())
+        print(f"  {level:>8.0e} {block['spread'].mean():>10.4f} {block['spread'].std():>10.4f} "
+              f"{block['spread'].min():>10.4f} {block['spread'].max():>10.4f} "
+              f"{signs_kept:>8}/{len(block)} {order_kept:>8}/{len(block)}")
+
+
 def main():
     RESULTS.mkdir(parents=True, exist_ok=True)
 
@@ -105,43 +146,27 @@ def main():
           f"signs {baseline['signs']}   {time.time() - started:.0f}s")
     print(f"  order  {baseline['order']}")
 
+    common = (x_base, y, design, columns, risk_free, target_index)
+
     rows = [{"level": 0.0, "draw": -1, **baseline}]
-
-    for level_index, level in enumerate(LEVELS):
-        print(f"\nrelative noise {level:.0e}")
-        for draw in range(DRAWS):
-            seed = 10_000 * (level_index + 1) + draw
-            generator = np.random.default_rng(seed)
-            # Relative noise: structural zeros are left alone by construction.
-            noise = generator.uniform(-1.0, 1.0, size=x_base.shape)
-            perturbed = x_base * (1.0 + level * noise)
-
-            model = MatlabPolicyGB(**GB).fit(perturbed, y)
-            curve = energy_curve(model, design, columns, risk_free)
-            record = summarise(model, curve, target_index)
-            rows.append({"level": level, "draw": draw, "seed": seed, **record})
-            print(f"  draw {draw}: spread {record['spread']:.6f}  signs {record['signs']}  "
-                  f"in-window {record['splits_in_window']}")
-
+    rows += sweep(*common, LEVELS, seed_base=10_000, seed_step=10_000)
     table = pd.DataFrame(rows)
     out = RESULTS / "perturbation_sensitivity.csv"
     table.to_csv(out, index=False)
 
+    fine = pd.DataFrame(
+        sweep(*common, NEAR_EPSILON_LEVELS,
+              seed_base=NEAR_EPSILON_SEED_BASE, seed_step=1_000)
+    )
+    fine_out = RESULTS / "perturbation_near_epsilon.csv"
+    fine.to_csv(fine_out, index=False)
+
     print(f"\n{'=' * 74}\n  SUMMARY\n{'=' * 74}")
-    print(f"  unperturbed spread {baseline['spread']:.6f}, signs {baseline['signs']}\n")
+    print(f"  unperturbed spread {baseline['spread']:.6f}, signs {baseline['signs']}")
+    report(fine, baseline, "near the last representable bit")
+    report(table[table["level"] > 0], baseline, "coarser perturbations")
 
-    perturbed_rows = table[table["level"] > 0]
-    header = f"  {'noise':>8} {'mean':>10} {'sd':>10} {'min':>10} {'max':>10} " \
-             f"{'signs kept':>11} {'order kept':>11}"
-    print(header)
-    for level, block in perturbed_rows.groupby("level"):
-        signs_kept = int((block["signs"] == baseline["signs"]).sum())
-        order_kept = int((block["order"] == baseline["order"]).sum())
-        print(f"  {level:>8.0e} {block['spread'].mean():>10.4f} {block['spread'].std():>10.4f} "
-              f"{block['spread'].min():>10.4f} {block['spread'].max():>10.4f} "
-              f"{signs_kept:>8}/{len(block)} {order_kept:>8}/{len(block)}")
-
-    print(f"\nWrote {out.relative_to(ROOT)}")
+    print(f"\nWrote {out.relative_to(ROOT)} and {fine_out.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
