@@ -176,7 +176,16 @@ def _best_split_in_node(X, y, mask, order, min_leaf, min_parent):
         # Strictly greater gain is required to displace the incumbent, so the
         # lower column index wins a tie.
         if best is None or gain > best[0]:
-            threshold = 0.5 * (values[position] + values[position + 1])
+            low, high = values[position], values[position + 1]
+            threshold = 0.5 * (low + high)
+            # When the two values are adjacent doubles the midpoint can round up
+            # to the upper one, and then "<= threshold" keeps every row on the
+            # left and the right child comes out empty. Fall back to the lower
+            # value, which still separates them. scikit-learn guards the same
+            # way. This never fires on the unperturbed sample; it fires when the
+            # inputs are perturbed at the level of the last representable bit.
+            if not threshold < high:
+                threshold = low
             best = (gain, column, float(threshold))
 
     return best
@@ -218,6 +227,11 @@ def build_tree(X, y, order, max_splits, min_leaf, min_parent):
             mask = masks[node_id]
             goes_left = mask & (X[:, column] <= threshold)
             goes_right = mask & ~goes_left
+            if not goes_left.any() or not goes_right.any():
+                raise ValueError(
+                    f"split on column {column} at {threshold!r} left one side empty; "
+                    "the threshold does not separate the node"
+                )
 
             depth = tree.depth[node_id] if isinstance(tree.depth, np.ndarray) else tree.depth[node_id]
             left_id = tree.add_node(float(y[goes_left].mean()), depth + 1, int(goes_left.sum()))
