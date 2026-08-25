@@ -14,6 +14,11 @@ The candidate ordering is fixed and must match feature_names_full552.csv:
 
 Running this file as a script performs the mandatory validation against
 X_trval_K62_reference.csv, the design matrix built in MATLAB.
+
+Every read passes float_precision="round_trip". The default pandas parser is
+fast rather than correctly rounded and shifts values by about 1e-14, which is
+far too much here: the scenario projection moves by twenty per cent under a
+perturbation of that size. See scripts/reexport_data_private.py.
 """
 
 from pathlib import Path
@@ -45,7 +50,7 @@ def _require(path):
 
 def load_panel():
     """Load the monthly panel and parse dates. One row = one portfolio-month."""
-    panel = pd.read_csv(_require(DATA / "training_panel.csv"))
+    panel = pd.read_csv(_require(DATA / "training_panel.csv"), float_precision="round_trip")
     panel["Date"] = pd.to_datetime(panel["Date"], format="%d-%b-%Y")
     return panel
 
@@ -138,7 +143,7 @@ def validate_against_reference(verbose=True):
     fit, _ = split_frames(panel)
 
     built = build_winning_matrix(fit)
-    reference = pd.read_csv(_require(DATA / "X_trval_K62_reference.csv"))
+    reference = pd.read_csv(_require(DATA / "X_trval_K62_reference.csv"), float_precision="round_trip")
 
     # Row alignment: the reference carries Y and Entity, use them as a key check.
     if not np.allclose(fit["Y"].to_numpy(), reference["Y"].to_numpy()):

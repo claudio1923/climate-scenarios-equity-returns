@@ -47,7 +47,7 @@ THESIS_SCENARIOS = [
 
 def load_design():
     """Scenario design: keys plus the 73 winning features, already built."""
-    design = pd.read_csv(_require(DATA / "scenario_design_K62.csv"))
+    design = pd.read_csv(_require(DATA / "scenario_design_K62.csv"), float_precision="round_trip")
     design["Date"] = pd.to_datetime(design["Date"], format="%d-%b-%Y")
     design["Sector"] = design["EntityLabel"].str.rsplit("_", n=1).str[0]
     return design
@@ -68,7 +68,9 @@ def load_risk_free():
     RF does not vary across entities inside one of those cells, so the join key
     carries no Entity.
     """
-    predictions = pd.read_csv(_require(RESULTS / "scenario_monthly_predictions.csv"))
+    predictions = pd.read_csv(
+        _require(RESULTS / "scenario_monthly_predictions.csv"), float_precision="round_trip"
+    )
     predictions["Date"] = pd.to_datetime(predictions["Date"], format="%d-%b-%Y")
     path = predictions[["Scenario", "Component", "Date", "RF"]].drop_duplicates()
     duplicated = path.duplicated(["Scenario", "Component", "Date"]).sum()
