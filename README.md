@@ -33,9 +33,18 @@ src/
   evaluate.py         out-of-sample R2 and RMSE on the sealed test block
   interpret.py        PDP and ICE curves for the six defence pairs
   scenarios.py        2025-2050 projection and Green/Brown log-ratio
+  matlab_policy_gb.py LSBoost with MATLAB's tree growth policy, in numpy:
+                      breadth-first growth under a split budget, with the
+                      per-level undo rule that scikit-learn does not offer
 scripts/
   make_figures.py     regenerates everything in figures/
   make_tables.py      builds results/mean_differences_table.csv
+  verify_237_months.py  reads the four .mat inputs directly and compares the
+                      189-month and 237-month refits
+  phase0_diagnostics.py  importance fingerprint, capacity probe, extrapolation
+  compare_growth_policies.py  the three growth policies side by side
+  task1_bestfirst_fitb.py     best-first upper bound on the projection
+  task2_matlab_policy.py      the MATLAB policy on both samples
 results/              thesis exports + replication outputs
 figures/              all figures used below
 ```
@@ -49,6 +58,26 @@ python src/build_features.py && python src/train_gb.py && python src/evaluate.py
 The `src/` steps need `data_private/`, which is not distributed (see
 [Data availability](#data-availability)). `scripts/make_tables.py` and the thesis-based figures run
 from the CSVs in `results/` alone.
+
+### Regenerable outputs
+
+Four monthly projection dumps are excluded from version control, at roughly 14 MB each. They are
+deterministic, so re-running the script that wrote them reproduces them byte for byte:
+
+| File | Recreated by |
+| --- | --- |
+| `results/verifica_237_mesi/scenario_monthly_fitA.csv` | `python scripts/verify_237_months.py` |
+| `results/verifica_237_mesi/scenario_monthly_fitB.csv` | `python scripts/verify_237_months.py` |
+| `results/task1/scenario_monthly_fitB_bestfirst.csv` | `python scripts/task1_bestfirst_fitb.py` |
+| `results/task2/scenario_monthly_fitB_matlabpolicy.csv` | `python scripts/task2_matlab_policy.py` |
+
+The aggregated log-ratio files and the text reports in the same folders are small and stay tracked,
+so the conclusions are readable without regenerating anything. Note that these four scripts read the
+`.mat` inputs directly and therefore need the private data.
+
+The MATLAB exports in `results/` are a different matter and stay tracked:
+`results/logratio_green_brown.csv` in particular is the reference the replication is compared
+against, and it cannot be rebuilt without MATLAB.
 
 ---
 
@@ -284,6 +313,21 @@ the replication outputs in `results/`, and the figures in `figures/`. The code i
 therefore readable end to end but not runnable without `data_private/`; every module fails with an
 explicit message pointing to this section when an input file is missing. The scripts in `scripts/`
 run from `results/` and need no private data.
+
+### Provenance of the MATLAB reference
+
+`results/logratio_green_brown.csv` is the file every comparison in this repository is measured
+against: 165 rows by 312 monthly columns, 51,480 values, no missing cells. It is a direct MATLAB
+export, not a file rebuilt along the way. The chain is
+`s3_K62_leaf10.m` → `Scenario_Yhat_K62L10_2005_2024.mat` → `s4_cumulate_logratio.m` →
+`Scenario_CumLogRatio_2005_2024.mat` → `writetable` in `export_highlights_data.m`. The copy in the
+MATLAB working folder and the two copies in this repository are byte-identical, and no Python module
+here writes that filename; they only read it.
+
+One limit is worth stating plainly. The `.m` scripts are not under version control. The timestamps
+of the `.mat` files are consistent with the chain above and with the scripts as they read today, but
+consistency is not proof: nothing rules out that a script was edited after the `.mat` it produced.
+The provenance is documented, not verified.
 
 ## Citation
 

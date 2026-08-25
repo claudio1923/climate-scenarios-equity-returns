@@ -1,0 +1,79 @@
+======================================================================
+1. TEST DI EQUIVALENZA CON SKLEARN (obbligatorio)
+======================================================================
+  depth=2 seed=0: builder identico a sklearn max_depth=2
+  depth=2 seed=1: builder identico a sklearn max_depth=2
+  depth=3 seed=0: builder identico a sklearn max_depth=3
+  depth=3 seed=1: builder identico a sklearn max_depth=3
+  depth=4 seed=0: builder identico a sklearn max_depth=4
+  depth=4 seed=1: builder identico a sklearn max_depth=4
+  -> il builder e' validato: con budget pieno riproduce l'albero completo.
+
+======================================================================
+2. FIT A (189 mesi) con la politica MATLAB
+======================================================================
+  split per albero : media=15.0000 min=15 max=15
+  foglie per albero: media=16.0000 max=16
+  profondita' max  : 12  (media 6.77)
+  alberi al budget di 15 split: 300/300
+
+  R2  in-sample = 0.706549   (tesi 0.7065)
+  RMSE in-sample = 3.818234   (tesi 3.8182)
+  R2  out-of-sample = 0.407008   (tesi 0.406)
+  RMSE out-of-sample = 5.105765   (tesi 5.108)
+
+  fingerprint FIT A (politica MATLAB)
+    predittori a importanza zero :      1   (tesi 1)
+    quota termini aggregati      :  76.8%   (tesi ~77%)
+    quota ExMkt_L0               :  68.7%   (tesi ~69%)
+    colonne a zero: ['ExMkt_L0_x_Entity_8']
+
+  soglie su R_WTI_L1_x_Entity_6: 130 split, 0 dentro [0.0399, 1.8447]
+
+======================================================================
+3. FIT B (237 mesi) con la politica MATLAB, poi proiezione
+======================================================================
+  split per albero : media=15.0000
+  foglie per albero: media=16.0000
+  profondita' max  : 12
+  R2 in-sample = 0.672071   RMSE in-sample = 3.989145
+
+  fingerprint FIT B (politica MATLAB)
+    predittori a importanza zero :      1   (tesi 1)
+    quota termini aggregati      :  78.4%   (tesi ~77%)
+    quota ExMkt_L0               :  70.1%   (tesi ~69%)
+    colonne a zero: ['ExMkt_L0_x_Entity_8']
+
+  soglie su R_WTI_L1_x_Entity_6: 157 split, 1 dentro [0.0399, 1.8447]
+    valori: [0.19937040923400096]
+
+  log-ratio ENRG dicembre 2050, componente transition:
+Scenario
+Below 2°C                                    -0.824162
+Delayed transition                            0.164409
+Fragmented World                             -0.934511
+Nationally Determined Contributions (NDCs)   -0.701207
+Net Zero 2050                                 0.285374
+  spread = 1.219885   (tesi 1.219887)
+  spread combined = 1.148503
+  spread physical = 0.000000
+
+======================================================================
+4. LE TRE POLITICHE AFFIANCATE
+======================================================================
+                          r2_is  rmse_is  r2_oos  rmse_oos  splits_mean  n_zero  exmkt_share
+politica                                                                                    
+sklearn max_depth=4      0.6503   4.1679  0.4103    5.0916       8.7433       5       0.7435
+sklearn best-first       0.7192   3.7351  0.3965    5.1509      15.0000       1       0.6709
+numpy budget 15 (MATLAB) 0.7065   3.8182  0.4070    5.1058      15.0000       1       0.6869
+tesi (MATLAB)            0.7065   3.8182  0.4060    5.1080          NaN       1       0.6900
+
+======================================================================
+5. LE QUATTRO PREVISIONI DICHIARATE IN ANTICIPO
+======================================================================
+  [  MANCATA] split medi per albero               15.00   atteso 13-14
+  [CENTRATA] R2 in-sample                       0.7065   atteso 0.7065
+  [CENTRATA] predittori a importanza zero            1   atteso ~1
+  [CENTRATA] quota ExMkt_L0                      68.7%   atteso ~69%
+
+  centrate: 3/4
