@@ -36,8 +36,7 @@ src/
                       growth under a budget on the number of splits
 scripts/
   make_figures.py     regenerates everything in figures/
-  make_tables.py      builds results/mean_differences_table.csv and
-                      results/growth_policy_table.csv
+  make_tables.py      builds results/mean_differences_table.csv
   reexport_data_private.py    writes the private CSVs at %.17g so they
                       round-trip exactly; run once, before anything else
 results/              aggregated results, see Data availability
@@ -51,9 +50,8 @@ python src/build_features.py && python src/train_gb.py && python src/evaluate.py
 ```
 
 The `src/` steps need `data_private/`, which is not distributed (see
-[Data availability](#data-availability)). The thesis-based figures and the mean-differences table
-run from the CSVs in `results/` alone; the growth-policy table inside `make_tables.py` fits models
-and therefore needs the private inputs, and is skipped with a message when they are absent.
+[Data availability](#data-availability)). `scripts/make_tables.py` and the figures built from
+`results/` need no private data.
 
 Some files in `results/` are exports that this code does not rebuild; they are listed under
 [Data availability](#data-availability).
@@ -197,23 +195,6 @@ constant inside them — so the budget is spent deeper instead, reaching depth 1
 pins it down: given a budget of `2**d - 1` on data where every node can split, it must reproduce a
 depth-`d` tree exactly, which it does at depths 2, 3 and 4.
 
-Fitting all three on the same design puts numbers on that:
-
-| Growth policy | R² in-sample | R² out-of-sample | splits/tree | Energy 2050 spread |
-|---|---|---|---|---|
-| scikit-learn `max_depth=4`, level-wise, truncated at depth 4 | 0.6503 | 0.4103 | 8.74 | 0.5213 |
-| **numpy builder, level-wise under a 15-split budget** | **0.7065** | **0.4070** | **15.00** | **1.2199** |
-| scikit-learn `max_leaf_nodes=16`, best-first | 0.7192 | 0.3965 | 15.00 | 1.4251 |
-| thesis (MATLAB) | 0.7065 | 0.4064 | not reported | 1.2199 |
-
-The budget policy is bracketed by the two approximations on in-sample fit, on out-of-sample fit and
-on the projection at the same time, and it lands where breadth-first growth predicts on each. Three
-independent axes agreeing is why the match to the thesis is not treated as a coincidence.
-
-The two scikit-learn policies remain available by name in `train_gb.build_model`, and
-[`scripts/make_tables.py`](scripts/make_tables.py) regenerates the table above from
-`results/growth_policy_table.csv`.
-
 **The risk-free path.** The projection compounds the total return, `yhat + RF`, not the excess
 return. The scenario design file carries no risk-free column, so the path is joined from the
 scenario predictions in `results/`, where RF is constant across entities within a scenario,
@@ -266,31 +247,42 @@ makes the reported out-of-sample figures an out-of-sample result rather than a s
 and only the estimation sample changes, to the full 237 months. Appendix A.3 of the thesis describes
 that refit and the reason for it. No re-optimization happens on the longer window.
 
-One thing the table of growth policies above is *not*: it is not part of this search.
-`max_depth=4` and `max_leaf_nodes=16` were never candidates, and no criterion in the thesis ever
-compared them. They are two ways of approximating the single constraint `MaxNumSplits = 15` in a
-library that does not offer it, and they appear only to show where the correct policy sits between
-them.
-
 ### Reading a CSV is not free
 
-The private inputs are CSV exports of MATLAB doubles, and getting them back intact takes two
-separate precautions. Neither is sufficient alone:
+The private inputs are CSV exports of double-precision numbers, and getting them back intact takes
+two separate precautions. Neither is sufficient alone:
 
-| Written with | Read with | Deviation from the MATLAB doubles |
+| Written with | Read with | Deviation from the original values |
 |---|---|---|
 | default precision | default parser | 4.97e-14 |
 | default precision | `float_precision="round_trip"` | 4.97e-14 |
 | `%.17g` | default parser | 1.42e-14 |
 | **`%.17g`** | **`float_precision="round_trip"`** | **0** |
 
-The original files simply carried too few digits, so no parser could recover them. The re-exported
-files carry enough, but pandas' default CSV parser is fast rather than correctly rounded and puts
-about 1e-14 back in. Both together give an exact round-trip, and only then does the pipeline
-reproduce 1.219885 rather than 1.4631.
+A file written at default precision simply does not carry enough digits, so no parser can recover
+the original values. A file written with `%.17g` does carry them, but pandas' default CSV parser is
+fast rather than correctly rounded and puts about 1e-14 back in. Both precautions together give an
+exact round-trip, and [`scripts/reexport_data_private.py`](scripts/reexport_data_private.py) applies
+the first while every reader in `src/` applies the second.
 
-This is worth knowing outside this project: a 5e-14 discrepancy in an input file is invisible in
-every diagnostic anyone normally looks at, and here it moved the headline result by twenty per cent.
+A deviation of 5e-14 sounds like something to ignore. On this model it is not. Feeding the pipeline
+the same inputs written at default precision, and leaving everything else untouched, moves the
+Energy 2050 transition differential by this much:
+
+| Scenario | exact inputs | default-precision inputs | shift |
+|---|---|---|---|
+| Net Zero 2050 | +0.2854 | +0.5916 | +0.3062 |
+| Delayed transition | +0.1644 | +0.4268 | +0.2624 |
+| Below 2°C | −0.8242 | −0.7346 | +0.0896 |
+| NDCs | −0.7012 | −0.6245 | +0.0767 |
+| Fragmented World | −0.9345 | −0.8716 | +0.0630 |
+| **range across scenarios** | **1.2199** | **1.4631** | **+0.2432** |
+
+The reason is in the shape of the model rather than in the size of the error. A boosted tree is a
+step function, and the projected fuel path over 2025–2050 spans about three per cent of the range
+the model was trained on. Over an interval that narrow, whether a step edge falls inside it decides
+the level of the answer, and a perturbation in the fourteenth decimal is enough to move an edge
+across. The ranking of the scenarios survives; the levels move by up to 0.31.
 
 ### Mean 2025–2050 differences by sector and scenario
 
