@@ -438,6 +438,18 @@ not reported in the thesis and not present in the exports, so the 15.00 and 16.0
 builder cannot be checked against the original directly — the in-sample agreement to nine decimals
 is the indirect evidence that stands in for it.
 
+**The perturbation measures slightly more than numerical sensitivity.** The noise is relative, so
+the 78.9% of cells that are exactly zero — the interaction columns are zero wherever the row belongs
+to another entity — stay exactly zero, and the structural sparsity of the design is preserved. What
+is not preserved is the repetition. A macroeconomic driver takes one value per month and that value
+is carried by all 22 portfolios, so a main-effect column of 5,214 rows holds only about 35 distinct
+values, each appearing roughly 149 times. Perturbing cell by cell turns one value into 149 slightly
+different ones, and a tree that could not split inside such a block now can. Part of the measured
+dispersion is therefore the effect of dissolving that structure, not sensitivity to arithmetic
+alone, and this is the most likely source of the upward shift reported above. A stricter measure
+would draw one perturbation per distinct underlying value and propagate it to every cell that
+carries it. That measurement was not run.
+
 **One rule in the growth policy is a choice, not a transcription.** When the split budget forces the
 per-level undo, ties in impurity gain have to be broken somehow, and the MathWorks documentation
 does not say how. The builder resolves them in favour of the lower node index and says so; the
