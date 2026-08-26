@@ -36,6 +36,17 @@ KEY_COLS = ["Entity", "EntityLabel", "Green", "Scenario", "Component", "Date", "
 # Scenarios projected but not reported: they have no risk-free path.
 REFERENCE_SCENARIOS = ("current policies", "baseline")
 
+# Short unambiguous codes for column names and compact printing. Truncating the
+# full names instead would collide: "Net Zero 2050" and "Nationally Determined
+# Contributions (NDCs)" share their first three characters.
+SCENARIO_CODES = {
+    "Net Zero 2050": "NetZero",
+    "Delayed transition": "Delayed",
+    "Below 2°C": "Below2C",
+    "Nationally Determined Contributions (NDCs)": "NDCs",
+    "Fragmented World": "Fragmented",
+}
+
 THESIS_SCENARIOS = [
     "Net Zero 2050",
     "Delayed transition",

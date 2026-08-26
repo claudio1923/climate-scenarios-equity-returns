@@ -34,16 +34,19 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from build_features import build_winning_matrix, load_panel  # noqa: E402
 from matlab_policy_gb import MatlabPolicyGB  # noqa: E402
-from scenarios import THESIS_SCENARIOS, load_design, load_risk_free, log_ratio  # noqa: E402
+from scenarios import (  # noqa: E402
+    SCENARIO_CODES,
+    THESIS_SCENARIOS,
+    load_design,
+    load_risk_free,
+    log_ratio,
+)  # noqa: E402
 
 LEVELS = [1e-14, 1e-13, 1e-12, 1e-10]
 
-# A finer sweep down to the last representable bit. At 1e-16, below the double
-# epsilon of 2.2e-16, only about a fifth of the non-zero cells change at all,
-# and each by a single unit in the last place.
-NEAR_EPSILON_LEVELS = [1e-16, 1e-15]
-NEAR_EPSILON_SEED_BASE = 90_000
-
+# The two magnitudes at the last representable bit, 1e-16 and 1e-15, are covered
+# by measure_conditioning_dense.py: eight draws cannot separate the proportions
+# there, so that sweep runs 150 per level and reports confidence intervals.
 DRAWS = 8
 END = pd.Timestamp("2050-12-31")
 TARGET = "R_WTI_L1_x_Entity_6"
@@ -85,10 +88,10 @@ def summarise(model, curve, target_index):
     return {
         "spread": float(curve.max() - curve.min()),
         "signs": "".join("+" if v > 0 else "-" for v in curve),
-        "order": ">".join(curve.sort_values(ascending=False).index.str[:4]),
+        "order": ">".join(curve.sort_values(ascending=False).index.map(SCENARIO_CODES)),
         "splits_on_target": int(thresholds.size),
         "splits_in_window": int(inside.size),
-        **{f"s_{name[:4]}": float(value) for name, value in curve.items()},
+        **{f"s_{SCENARIO_CODES[name]}": float(value) for name, value in curve.items()},
     }
 
 
@@ -154,19 +157,11 @@ def main():
     out = RESULTS / "perturbation_sensitivity.csv"
     table.to_csv(out, index=False)
 
-    fine = pd.DataFrame(
-        sweep(*common, NEAR_EPSILON_LEVELS,
-              seed_base=NEAR_EPSILON_SEED_BASE, seed_step=1_000)
-    )
-    fine_out = RESULTS / "perturbation_near_epsilon.csv"
-    fine.to_csv(fine_out, index=False)
-
     print(f"\n{'=' * 74}\n  SUMMARY\n{'=' * 74}")
     print(f"  unperturbed spread {baseline['spread']:.6f}, signs {baseline['signs']}")
-    report(fine, baseline, "near the last representable bit")
     report(table[table["level"] > 0], baseline, "coarser perturbations")
 
-    print(f"\nWrote {out.relative_to(ROOT)} and {fine_out.relative_to(ROOT)}")
+    print(f"\nWrote {out.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
