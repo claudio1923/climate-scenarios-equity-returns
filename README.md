@@ -52,7 +52,6 @@ scripts/
   make_tables.py      builds results/mean_differences_table.csv
   reexport_data_private.py    rewrites the private CSVs at %.17g so they
                       round-trip exactly; run once, before anything else
-  measure_conditioning.py       perturbation sweep, coarse magnitudes
   measure_conditioning_dense.py perturbation sweep at the last representable
                       bit, 150 draws per magnitude, in parallel
   verify_237_months.py  reads the four .mat inputs directly and compares the
@@ -288,6 +287,12 @@ The 237-month estimation matrix is perturbed with relative noise, the model is r
 scratch and the projection recomputed, 150 draws per magnitude with fixed seeds. At 1e-16, below
 the double epsilon of 2.2e-16, only about a fifth of the non-zero cells change at all and each by a
 single unit in the last place.
+
+Two magnitudes are reported, not more. Coarser perturbations were swept first at eight draws each,
+and those numbers turned out to measure nothing: re-running them with a different set of seeds moved
+the mean spread by 0.16 to 0.22, the same size as the differences being compared. Eight draws cannot
+support a comparison of means, or separate one proportion from another, so those levels were dropped
+rather than reported with caveats.
 
 | Perturbation | Energy 2050 spread | sign pattern kept | Net Zero and Delayed both positive |
 |---|---|---|---|

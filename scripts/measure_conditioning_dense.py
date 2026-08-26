@@ -2,20 +2,34 @@
 Dense version of the perturbation sweep, for the two magnitudes near the last
 representable bit.
 
-Eight draws per level are enough to see that the projection moves and nowhere
-near enough to say by how much: they cannot separate 5/8 from 7/8, and they
-cannot establish where the sensitivity saturates. This script runs the same
-experiment at 1e-16 and 1e-15 with enough draws to put a confidence interval on
-the fraction of draws that keep the reference sign pattern.
+Only two magnitudes are run, and both at 150 draws, because that is the number
+needed for the answer to mean anything. An earlier version swept four coarser
+magnitudes at eight draws each and the numbers turned out to measure nothing:
+re-running them with a different set of seeds moved the mean spread by 0.16 to
+0.22, which is the same size as the effects being compared. Those levels are not
+reported.
+
+At 150 draws the share of draws keeping a given reading carries a usable
+confidence interval, which is what the sweep is for.
 
 The fits are independent, so they run in parallel; every draw still has its own
-fixed seed, and the seeds do not overlap with the coarse sweep in
-measure_conditioning.py.
+fixed seed.
 
-What is measured here is the numerical conditioning of the procedure: how much
-the answer moves when the inputs are nudged at the level of floating-point
-representation. It is not a statistical confidence interval for the estimate,
-and the two must not be read as if they were the same quantity.
+What exactly is perturbed
+-------------------------
+The 237-month estimation matrix, and nothing else. The target and the scenario
+design both enter unperturbed. So what this measures is the conditioning of the
+estimation step with respect to its own regressors: how much the fitted model,
+and therefore the projection it produces, moves when the sample it is fitted on
+is nudged at the level of floating-point representation.
+
+Two neighbouring questions are not measured here and should not be read off
+these numbers: the conditioning of the projection with respect to the scenario
+design, and the conditioning with respect to the target.
+
+None of this is a statistical confidence interval for the estimate. It is a
+property of the procedure, not of the sampling distribution, and the two must
+not be read as if they were the same quantity.
 
 Run from the repository root:  python scripts/measure_conditioning_dense.py
 """
@@ -34,6 +48,10 @@ RESULTS = ROOT / "results" / "conditioning"
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
+# Module level, not inside a function: both main() and every worker process need
+# it, and workers re-import this module rather than inheriting its globals.
+from scenarios import SCENARIO_CODES  # noqa: E402
+
 LEVELS = [1e-16, 1e-15]
 DRAWS = 150
 SEED_BASE = 500_000
@@ -50,7 +68,6 @@ def _initialise():
     from build_features import build_winning_matrix, load_panel
     from scenarios import (
         REFERENCE_SCENARIOS,
-        SCENARIO_CODES,
         THESIS_SCENARIOS,
         load_design,
         load_risk_free,

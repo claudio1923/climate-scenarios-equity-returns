@@ -49,6 +49,49 @@ SCENARIO_COLOURS = {
 }
 
 
+# Readable names for the drivers, used in the figure labels.
+DRIVER_NAMES = {
+    "UNRATE_DIFF": "UNRATE",
+    "CPI_DIFF": "CPI",
+    "R_WTI": "WTI",
+    "R_NatGas": "NatGas",
+    "Tas_ANOM": "Temp",
+    "Precip_ANOM": "Precip",
+    "Wind_ANOM": "Wind",
+    "ExMkt": "ExMkt",
+}
+LAG_NAMES = {"L0": "(t)", "L1": "(t-1)", "L2": "(t-2)"}
+
+
+def _entity_names():
+    """Entity code -> readable portfolio name, e.g. 6 -> ENRG-Brown."""
+    sys.path.insert(0, str(ROOT / "src"))
+    from build_features import load_entity_labels
+
+    readable = {}
+    for code, label in load_entity_labels().items():
+        sector, leg = label.rsplit("_", 1)
+        readable[code] = f"{sector}-{'Green' if leg == 'G' else 'Brown'}"
+    return readable
+
+
+def pretty_feature(name, entity_names):
+    """
+    Turn a raw feature name into the label used in the figures.
+
+        R_WTI_L1_x_Entity_6 -> WTI(t-1) x ENRG-Brown
+        ExMkt_L1            -> ExMkt(t-1)
+    """
+    base, _, entity = name.partition("_x_Entity_")
+
+    driver, _, lag = base.rpartition("_")
+    label = DRIVER_NAMES.get(driver, driver) + LAG_NAMES.get(lag, "")
+
+    if entity:
+        label += f" x {entity_names[int(entity)]}"
+    return label
+
+
 def _need(path):
     if not path.exists():
         raise FileNotFoundError(f"Missing {path}. Run the src/ modules first.")
@@ -67,30 +110,33 @@ def _save(fig, name):
 
 def fig_model_comparison():
     """
-    Out-of-sample R2 of the four thesis models, plus the Python replication of
-    the winning one. The y axis starts just below the lowest bar on purpose:
-    the point of the figure is how close the four models are.
+    Out-of-sample R2 of the four models. The y axis starts just below the lowest
+    bar on purpose: the point of the figure is how close the four models are.
+
+    The Gradient Boosting bar is the value produced by the code in this
+    repository; the other three come from oos_model_comparison.csv.
     """
-    thesis = pd.read_csv(_need(RESULTS / "oos_model_comparison.csv"))
-    replication = pd.read_csv(_need(RESULTS / "replication_vs_thesis_metrics.csv"))
-    replicated_r2 = float(
-        replication.loc[
-            replication["Metric"] == "R2 out-of-sample", "Replication (Python)"
-        ].iloc[0]
+    comparison = pd.read_csv(_need(RESULTS / "oos_model_comparison.csv"))
+    metrics = pd.read_csv(_need(RESULTS / "replication_vs_thesis_metrics.csv"))
+    gb_r2 = float(
+        metrics.loc[metrics["Metric"] == "R2 out-of-sample", "Replication (Python)"].iloc[0]
     )
 
     display = {
         "ElasticNet": "Elastic Net",
         "RandomForest": "Random Forest",
         "Panel": "Panel (linear)",
-        "GradientBoosting": "Gradient Boosting",
     }
-    order = ["ElasticNet", "RandomForest", "Panel", "GradientBoosting"]
-    thesis = thesis.set_index("Models").loc[order]
+    order = ["ElasticNet", "RandomForest", "Panel"]
+    comparison = comparison.set_index("Models").loc[order]
 
-    labels = [display[m] for m in order] + ["Gradient Boosting\n(Python replication)"]
-    values = list(thesis["R2"]) + [replicated_r2]
-    colours = ["#b0b0b0", "#b0b0b0", "#b0b0b0", "#2166ac", "#7fbc41"]
+    labels = [display[m] for m in order] + ["Gradient Boosting"]
+    values = list(comparison["R2"]) + [gb_r2]
+    colours = ["#b0b0b0", "#b0b0b0", "#b0b0b0", "#2166ac"]
+
+    print("\n[fig_model_comparison] values plotted:")
+    for label, value in zip(labels, values):
+        print(f"    {label:<20} {value:.4f}")
 
     fig, ax = plt.subplots(figsize=(8.5, 4.6))
     bars = ax.bar(labels, values, color=colours, edgecolor="white", width=0.62)
@@ -110,11 +156,7 @@ def fig_model_comparison():
         )
 
     ax.set_ylabel("Out-of-sample $R^2$")
-    ax.set_title(
-        "Out-of-sample $R^2$ on the sealed 2021-2024 test block\n"
-        "grey and blue: thesis (MATLAB), green: Python replication",
-        fontsize=11,
-    )
+    ax.set_title("Out-of-sample $R^2$ on the sealed 2021-2024 test block", fontsize=11)
     ax.tick_params(axis="x", labelsize=9)
     ax.grid(axis="y", alpha=0.3)
     ax.set_axisbelow(True)
@@ -146,6 +188,20 @@ def fig_trajectories(sector, sector_name, filename):
     """
     long = _logratio_long()
     subset = long[long["Sector"] == sector]
+
+    # Print the end-of-horizon value of every line drawn, so the figure can be
+    # checked against the numbers without reading it off the axis.
+    end = subset["Date"].max()
+    print(f"\n[{filename}] log-ratio at {end:%Y-%m}, one line per scenario:")
+    for component in ["physical", "transition"]:
+        block = subset[(subset["Component"] == component) & (subset["Date"] == end)]
+        block = block.set_index("Scenario")
+        print(f"  {component}:")
+        for scenario in SCENARIO_ORDER:
+            if scenario in block.index:
+                print(f"    {SCENARIO_SHORT[scenario]:<22} {block.loc[scenario, 'LogRatio']:+.4f}")
+        spread = block["LogRatio"].max() - block["LogRatio"].min()
+        print(f"    {'spread across scenarios':<22} {spread:.4f}")
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8), sharey=True)
     for ax, component in zip(axes, ["physical", "transition"]):
@@ -183,6 +239,11 @@ def fig_pdp():
     """Two rows by three columns, one panel per defence pair. Replication only."""
     pdp = pd.read_csv(_need(RESULTS / "replication_pdp_curves.csv"))
     pairs = list(dict.fromkeys(pdp["Pair"]))
+
+    print("\n[fig_pdp_2x3] vertical range of each average curve (max - min):")
+    for pair in pairs:
+        block = pdp[pdp["Pair"] == pair]
+        print(f"    {pair:<26} {block['PDP'].max() - block['PDP'].min():.2f}")
 
     fig, axes = plt.subplots(2, 3, figsize=(13, 7))
     for ax, pair in zip(axes.ravel(), pairs):
@@ -241,42 +302,43 @@ def fig_ice():
 # ------------------------------------------------------------------- importances
 
 def fig_feature_importance(top_n=15):
-    """Top features of the thesis model, next to the same features in the replication."""
-    thesis = pd.read_csv(_need(RESULTS / "gb_feature_importance.csv"))
-    replication = pd.read_csv(_need(RESULTS / "replication_gb_feature_importance.csv"))
+    """
+    Top features by importance, market factor excluded.
 
-    top = thesis.head(top_n).copy()
-    lookup = replication.set_index("Feature")["SharePct"]
-    top["ReplicationShare"] = top["Feature"].map(lookup).fillna(0.0)
+    The contemporaneous market factor takes about three quarters of the budget
+    on its own; leaving it in flattens every other bar to nothing and shows what
+    is already known. It is dropped and the remaining shares are renormalised,
+    so the figure answers "what matters once the market is taken out".
+    """
+    importance = pd.read_csv(_need(RESULTS / "replication_gb_feature_importance.csv"))
+
+    market_share = float(importance.loc[importance["Feature"] == "ExMkt_L0", "SharePct"].iloc[0])
+    without_market = importance[importance["Feature"] != "ExMkt_L0"].copy()
+    without_market["SharePct"] = (
+        100 * without_market["Importance"] / without_market["Importance"].sum()
+    )
+
+    entity_names = _entity_names()
+    top = without_market.head(top_n).copy()
+    top["Label"] = top["Feature"].map(lambda n: pretty_feature(n, entity_names))
+
+    print(f"\n[fig_feature_importance] market factor excluded ({market_share:.1f}% of the "
+          f"full budget); shares below are renormalised over the rest:")
+    for label, share in zip(top["Label"], top["SharePct"]):
+        print(f"    {label:<28} {share:5.2f}%")
 
     positions = np.arange(len(top))[::-1]
-    height = 0.38
 
-    fig, ax = plt.subplots(figsize=(9.5, 7))
-    ax.barh(
-        positions + height / 2,
-        top["SharePct"],
-        height=height,
-        color="#2166ac",
-        label="Thesis (MATLAB)",
-    )
-    ax.barh(
-        positions - height / 2,
-        top["ReplicationShare"],
-        height=height,
-        color="#7fbc41",
-        label="Python replication",
-    )
+    fig, ax = plt.subplots(figsize=(9.5, 6.5))
+    ax.barh(positions, top["SharePct"], height=0.62, color="#2166ac")
 
     ax.set_yticks(positions)
-    ax.set_yticklabels(top["Feature"], fontsize=9)
-    ax.set_xlabel("Share of total importance (%)")
+    ax.set_yticklabels(top["Label"], fontsize=9.5)
+    ax.set_xlabel("Share of importance, market factor excluded (%)")
     ax.set_title(
-        f"Top {top_n} features of the thesis Gradient Boosting model,\n"
-        "with the share the same features take in the replication",
+        f"Top {top_n} features once the market factor is taken out",
         fontsize=11,
     )
-    ax.legend(fontsize=9)
     ax.grid(axis="x", alpha=0.3)
     ax.set_axisbelow(True)
     fig.tight_layout()
