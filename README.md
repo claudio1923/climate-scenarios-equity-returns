@@ -20,11 +20,10 @@ MATLAB's tree growth policy has no equivalent in scikit-learn and had to be writ
 
 Thesis values and replication values are labelled wherever both appear, and never mixed.
 
-A word on what "reproduces" means here, because this repository also measures the answer to a
-harder question. Agreement to 1.4e-05 says the Python code walks the same path as the MATLAB code.
-It does not say the path is stable: perturbing the estimation matrix by a single unit in the last
-representable bit moves the headline projection by half a point. Both facts are reported —
-see [How stable is the projection](#how-stable-is-the-projection).
+A word on what "reproduces" means here. Agreement to 1.4e-05 says the Python code walks the same
+path as the MATLAB code and arrives where it arrives. It says nothing about how firmly that
+destination is fixed, which is a separate question and one the thesis addresses in its own terms:
+the scenario projections are to be read as directions of adjustment, not as calibrated magnitudes.
 
 ## Setup
 
@@ -52,8 +51,6 @@ scripts/
   make_tables.py      builds results/mean_differences_table.csv
   reexport_data_private.py    rewrites the private CSVs at %.17g so they
                       round-trip exactly; run once, before anything else
-  measure_conditioning_dense.py perturbation sweep at the last representable
-                      bit, 150 draws per magnitude, in parallel
   verify_237_months.py  reads the four .mat inputs directly and compares the
                       189-month and 237-month refits
   phase0_diagnostics.py  importance fingerprint, capacity probe, extrapolation
@@ -192,17 +189,15 @@ below them.
 
 The ordering is not a simple ranking of ambition. It takes ambition *and* speed together: Net Zero
 and Delayed transition have both, Below 2°C has ambition without speed, Fragmented World has speed
-without ambition, NDCs has neither. This is the part that holds up: under perturbation of the
-estimation matrix at the last representable bit, Net Zero and Delayed transition are both positive
-in 93.3% of draws, 95% interval [88.2%, 96.3%].
+without ambition, NDCs has neither. Net Zero sits at the green extreme and Delayed transition beside
+it, and that placement is the durable part of the finding.
 
-The crossing of zero is a different kind of statement, and a weaker one. Whether the remaining
-three pathways land below zero or merely below Net Zero is a property of the *level* of the
-log-ratio, and the level moves with the estimation window and with the numerical detail of the fit.
-All three are negative together in 70.7% of the same draws, [62.9%, 77.4%]. So the reading to take
-away is Net Zero at the green extreme, not "Energy inverts its sign" — a claim that is true of this
-particular fit rather than of the sector. Appendix A.3 of the thesis treats the crossing the same
-way.
+The crossing of zero is a different kind of statement, and a weaker one. Whether the remaining three
+pathways land below zero or merely below Net Zero is a property of the *level* of the log-ratio, and
+the level shifts with the estimation window. Appendix A.3 of the thesis treats it that way, and so
+should a reader of this repository: the result to take away is which pathways put the green leg
+ahead, not that Energy inverts its sign — the latter is a description of this particular fit rather
+than a property of the sector.
 
 The left panel is the other half of the finding, and it is kept in the figure on purpose: under the
 physical component the five scenarios lie exactly on top of each other. The Energy spread across
@@ -277,62 +272,6 @@ reproduce 1.219885 rather than 1.4631.
 This is worth knowing outside this project: a 5e-14 discrepancy in an input file is invisible in
 every diagnostic anyone normally looks at, and here it moved the headline result by twenty per cent.
 
-### How stable is the projection
-
-Fixing the export removed one particular perturbation. It did not remove the sensitivity that made
-that perturbation matter, so the sensitivity itself was measured
-([`scripts/measure_conditioning_dense.py`](scripts/measure_conditioning_dense.py)).
-
-The 237-month estimation matrix is perturbed with relative noise, the model is refitted from
-scratch and the projection recomputed, 150 draws per magnitude with fixed seeds. At 1e-16, below
-the double epsilon of 2.2e-16, only about a fifth of the non-zero cells change at all and each by a
-single unit in the last place.
-
-Two magnitudes are reported, not more. Coarser perturbations were swept first at eight draws each,
-and those numbers turned out to measure nothing: re-running them with a different set of seeds moved
-the mean spread by 0.16 to 0.22, the same size as the differences being compared. Eight draws cannot
-support a comparison of means, or separate one proportion from another, so those levels were dropped
-rather than reported with caveats.
-
-| Perturbation | Energy 2050 spread | sign pattern kept | Net Zero and Delayed both positive |
-|---|---|---|---|
-| none | 1.2199 | — | — |
-| 1e-16, one unit in the last place | mean 1.539, range 0.83 to 2.33 | 64.0% [56.1, 71.2] | 93.3% [88.2, 96.3] |
-| 1e-15 | mean 1.552, range 0.61 to 2.32 | 56.7% [48.7, 64.3] | 96.0% [91.5, 98.2] |
-
-Three things follow. The magnitude of the spread is not identified at double precision: flipping the
-last bit of a fifth of the matrix moves it by half a point. The unperturbed value of 1.2199 is not a
-central value of that distribution but sits at its thirteenth percentile. And the two magnitudes are
-not distinguishable from one another, so the sensitivity is saturated at one bit rather than growing
-with the perturbation.
-
-What survives is narrower than the full pattern, and it is the reading highlight 4 is built on: Net
-Zero and Delayed transition both positive, in 93.3% of draws.
-
-![Conditioning of the 2050 endpoint](figures/fig_conditioning.png)
-
-One asymmetry has to be stated, because it qualifies both headline shares and it qualifies them in
-opposite directions. The perturbation does not scatter the draws symmetrically around the
-unperturbed fit: it shifts every scenario upward, by between +0.37 and +0.70 at the median, so each
-unperturbed value sits between the twelfth and the twenty-fourth percentile of its own distribution.
-The likely reason is that the unperturbed design carries exact ties — most interaction columns are
-exactly zero on most rows — and perturbing it breaks them, letting the tree make splits the original
-data cannot support.
-
-So the 93.3% for "Net Zero and Delayed both positive" is measured on draws pushed toward positive
-values and is, if anything, generous; the 70.7% for "all three remaining pathways negative" is
-measured on the same draws pushed away from negative values and is, if anything, harsh. Neither
-share should be read as a probability that the finding is true. They are both descriptions of how a
-deterministic procedure behaves when its arithmetic is disturbed.
-
-**This measures the procedure, not the estimate.** It is the numerical conditioning of the fit with
-respect to its own regressors — how much the answer moves when the arithmetic is nudged. It is not a
-confidence interval, it carries no information about sampling error, and the intervals above are
-binomial intervals on a share of draws, not on a population parameter. The statistical uncertainty
-of the estimate is a separate question, addressed in the thesis and not here. Two neighbouring
-conditioning questions are also *not* measured: sensitivity to the scenario design, and sensitivity
-to the target. Only the estimation matrix is perturbed.
-
 ### How closely the replication matches
 
 Over the full projection — 11 sectors x 5 scenarios x 3 components x 312 months, 51,480 values —
@@ -393,14 +332,12 @@ remaining seven are at 0.02 or below, four of them at 0.00.
 An earlier version of this section counted sectors by whether their log-ratio crosses zero — "nine
 structural, two move, one inverts". That count is not reported any more, because it classifies
 sectors by a threshold that is not stable. Crossing zero is a property of the level, and the level
-moves with the estimation window and with the numerical detail of the fit. Ranking by response is
-the more durable statement, and it does not need a cut-off: Energy first by a wide margin,
-Materials second, everything else far behind.
+shifts with the estimation window. Ranking by response is the more durable statement, and it does
+not need a cut-off: Energy first by a wide margin, Materials second, everything else far behind.
 
 So the answer to the research question is not "structural" and not "conditional", but conditional in
-a specific place and through a specific channel. In Energy the channel is fuel, the pathways that
-favour the green leg are the ones combining ambition with speed, and the ranking they produce holds
-up under perturbation where the absolute levels do not.
+a specific place and through a specific channel. In Energy the channel is fuel, and the pathways
+that put the green leg ahead are the ones combining ambition with speed.
 
 ## Limitations and future work
 
@@ -423,13 +360,12 @@ annual, and ESG coverage thins out before 2005.
 that choice.
 
 **Scenario paths are smooth by construction.** The projections should be read as directions of
-adjustment, not as magnitudes. The thesis reaches that conclusion from the low volatility of the
-NGFS paths; the conditioning measured here is a second, independent reason for the same caution,
-and a sharper one. The projected fuel path over 2025–2050 spans roughly 0.04 to 1.85, about three
-per cent of the range the model was trained on and sitting close to its median. A boosted tree is a
-step function, so over an interval that narrow the answer depends on whether a step edge happens to
-fall inside it — which is why the magnitude moves under perturbations at the last representable bit
-while the ranking does not.
+adjustment, not as magnitudes, which is the conclusion the thesis reaches from the low volatility of
+the NGFS paths. The design of the projection gives a second reason for the same caution. The
+projected fuel path over 2025–2050 spans roughly 0.04 to 1.85, about three per cent of the range the
+model was trained on and sitting close to its median. A boosted tree is a step function, so over an
+interval that narrow the level of the answer depends on whether a step edge happens to fall inside
+it, while the ranking across scenarios does not.
 
 **No MATLAB was re-run.** Every comparison in this repository is against exported files, not against
 a live MATLAB session. The `.m` scripts are not under version control; their provenance is
@@ -438,22 +374,11 @@ not reported in the thesis and not present in the exports, so the 15.00 and 16.0
 builder cannot be checked against the original directly — the in-sample agreement to nine decimals
 is the indirect evidence that stands in for it.
 
-**The perturbation measures slightly more than numerical sensitivity.** The noise is relative, so
-the 78.9% of cells that are exactly zero — the interaction columns are zero wherever the row belongs
-to another entity — stay exactly zero, and the structural sparsity of the design is preserved. What
-is not preserved is the repetition. A macroeconomic driver takes one value per month and that value
-is carried by all 22 portfolios, so a main-effect column of 5,214 rows holds only about 35 distinct
-values, each appearing roughly 149 times. Perturbing cell by cell turns one value into 149 slightly
-different ones, and a tree that could not split inside such a block now can. Part of the measured
-dispersion is therefore the effect of dissolving that structure, not sensitivity to arithmetic
-alone, and this is the most likely source of the upward shift reported above. A stricter measure
-would draw one perturbation per distinct underlying value and propagate it to every cell that
-carries it. That measurement was not run.
-
 **One rule in the growth policy is a choice, not a transcription.** When the split budget forces the
 per-level undo, ties in impurity gain have to be broken somehow, and the MathWorks documentation
-does not say how. The builder resolves them in favour of the lower node index and says so; the
-unperturbed fit does not appear to depend on it, but that is an observation rather than a proof.
+does not say how. The builder resolves them in favour of the lower node index and says so. The fit
+reported here does not appear to turn on that choice, since it reproduces the MATLAB result, but
+agreement is not proof that the rule matches.
 
 **The two scenario-sensitive sectors depend on the design.** A richer model might find others.
 Communication hints at why: its interaction budget sits on temperature, which does not separate

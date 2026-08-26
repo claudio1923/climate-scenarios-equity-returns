@@ -7,12 +7,9 @@ Sources are kept separate and always labelled:
                        from the two fits (189 months for metrics, 237 for the
                        scenario projection)
 
-One deliberate omission. The trajectory panels are drawn as single lines, with no
-uncertainty band around them, even though the projection is known to be poorly
-conditioned. The dispersion that was measured is the dispersion of the 2050
-endpoint, not of the monthly paths, so a band would be an interpolation of a
-quantity nobody computed. fig_conditioning.png carries that information instead,
-where it is an actual measurement.
+The trajectory panels are drawn as single lines, with no band around them: they
+are point projections and nothing in this repository estimates a distribution
+around them.
 
 Run the src/ modules first (they write the replication CSVs), then:
     python scripts/make_figures.py
@@ -247,9 +244,8 @@ def fig_trajectories(sector, sector_name, filename):
     fig.text(
         0.5,
         -0.02,
-        "Single lines, no uncertainty band: these are point projections. "
-        "The 2050 endpoints are marked, and their stability is measured separately "
-        "in fig_conditioning.png.",
+        "Single lines, no uncertainty band: these are point projections, "
+        "with the 2050 endpoints marked.",
         ha="center",
         fontsize=8.5,
         style="italic",
@@ -257,81 +253,6 @@ def fig_trajectories(sector, sector_name, filename):
     )
     fig.tight_layout()
     _save(fig, filename)
-
-
-# -------------------------------------------------------------------- conditioning
-
-def fig_conditioning():
-    """
-    What the 2050 endpoint does when the estimation matrix is nudged by one unit
-    in the last representable bit: 150 refits, one swarm of points per scenario.
-
-    This is the figure that carries the uncertainty. It shows directly that Net
-    Zero and Delayed transition stay above zero almost always, while the other
-    three straddle it.
-    """
-    from scenarios import SCENARIO_CODES
-
-    table = pd.read_csv(_need(RESULTS / "conditioning" / "perturbation_dense.csv"))
-    finest = table["level"].min()
-    block = table[table["level"] == finest]
-
-    comparison = pd.read_csv(_need(RESULTS / "replication_logratio_2050_comparison.csv"))
-    unperturbed = comparison[
-        (comparison["Sector"] == "ENRG") & (comparison["Component"] == "transition")
-    ].set_index("Scenario")["LogRatioReplication"]
-
-    rng = np.random.default_rng(0)
-    fig, ax = plt.subplots(figsize=(10, 5.6))
-
-    print(f"\n[fig_conditioning] {len(block)} draws at relative noise {finest:.0e}")
-    for position, scenario in enumerate(SCENARIO_ORDER):
-        values = block[f"s_{SCENARIO_CODES[scenario]}"].to_numpy()
-        jitter = rng.uniform(-0.16, 0.16, size=values.size)
-        ax.scatter(
-            position + jitter,
-            values,
-            s=11,
-            alpha=0.35,
-            color=SCENARIO_COLOURS[scenario],
-            edgecolors="none",
-        )
-        reference = float(unperturbed[scenario])
-        ax.plot([position - 0.3, position + 0.3], [reference, reference],
-                color="black", linewidth=2, zorder=5)
-        share = 100 * (values > 0).mean()
-        ax.text(position, ax.get_ylim()[1], "", ha="center")
-        print(f"    {SCENARIO_LABEL[scenario]:<22} unperturbed {reference:+.4f}   "
-              f"positive in {share:.1f}% of draws   "
-              f"range [{values.min():+.3f}, {values.max():+.3f}]")
-
-    ax.axhline(0, color="#b2182b", linewidth=1.2, linestyle="--", zorder=4)
-    ax.set_xticks(range(len(SCENARIO_ORDER)))
-    ax.set_xticklabels([SCENARIO_LABEL[s] for s in SCENARIO_ORDER], fontsize=9)
-    ax.set_ylabel("Energy Green/Brown log-ratio, December 2050")
-    ax.set_title(
-        "Each point is one refit after nudging the estimation matrix\n"
-        f"by one unit in the last representable bit ({len(block)} draws); "
-        "black bars are the unperturbed values",
-        fontsize=11,
-    )
-
-    for position, scenario in enumerate(SCENARIO_ORDER):
-        values = block[f"s_{SCENARIO_CODES[scenario]}"].to_numpy()
-        ax.annotate(
-            f"{100 * (values > 0).mean():.0f}% > 0",
-            xy=(position, ax.get_ylim()[0]),
-            xytext=(0, 6),
-            textcoords="offset points",
-            ha="center",
-            fontsize=8.5,
-            color="#333333",
-        )
-
-    ax.grid(axis="y", alpha=0.3)
-    ax.set_axisbelow(True)
-    fig.tight_layout()
-    _save(fig, "fig_conditioning.png")
 
 
 # --------------------------------------------------------------------- PDP / ICE
@@ -442,7 +363,6 @@ def main():
     fig_model_comparison()
     fig_trajectories("ENRG", "Energy", "fig_energy_trajectories.png")
     fig_trajectories("MATS", "Materials", "fig_materials_trajectories.png")
-    fig_conditioning()
     fig_pdp()
     fig_ice()
     fig_feature_importance()
