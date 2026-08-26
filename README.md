@@ -309,6 +309,22 @@ with the perturbation.
 What survives is narrower than the full pattern, and it is the reading highlight 4 is built on: Net
 Zero and Delayed transition both positive, in 93.3% of draws.
 
+![Conditioning of the 2050 endpoint](figures/fig_conditioning.png)
+
+One asymmetry has to be stated, because it qualifies both headline shares and it qualifies them in
+opposite directions. The perturbation does not scatter the draws symmetrically around the
+unperturbed fit: it shifts every scenario upward, by between +0.37 and +0.70 at the median, so each
+unperturbed value sits between the twelfth and the twenty-fourth percentile of its own distribution.
+The likely reason is that the unperturbed design carries exact ties — most interaction columns are
+exactly zero on most rows — and perturbing it breaks them, letting the tree make splits the original
+data cannot support.
+
+So the 93.3% for "Net Zero and Delayed both positive" is measured on draws pushed toward positive
+values and is, if anything, generous; the 70.7% for "all three remaining pathways negative" is
+measured on the same draws pushed away from negative values and is, if anything, harsh. Neither
+share should be read as a probability that the finding is true. They are both descriptions of how a
+deterministic procedure behaves when its arithmetic is disturbed.
+
 **This measures the procedure, not the estimate.** It is the numerical conditioning of the fit with
 respect to its own regressors — how much the answer moves when the arithmetic is nudged. It is not a
 confidence interval, it carries no information about sampling error, and the intervals above are
