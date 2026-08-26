@@ -51,12 +51,6 @@ scripts/
   make_tables.py      builds results/mean_differences_table.csv
   reexport_data_private.py    rewrites the private CSVs at %.17g so they
                       round-trip exactly; run once, before anything else
-  verify_237_months.py  reads the four .mat inputs directly and compares the
-                      189-month and 237-month refits
-  phase0_diagnostics.py  importance fingerprint, capacity probe, extrapolation
-  compare_growth_policies.py  the three growth policies side by side
-  task1_bestfirst_fitb.py     best-first upper bound on the projection
-  task2_matlab_policy.py      the MATLAB policy on both samples
 results/              thesis exports + replication outputs
 figures/              all figures used below
 ```
@@ -71,25 +65,9 @@ The `src/` steps need `data_private/`, which is not distributed (see
 [Data availability](#data-availability)). `scripts/make_tables.py` and the thesis-based figures run
 from the CSVs in `results/` alone.
 
-### Regenerable outputs
-
-Four monthly projection dumps are excluded from version control, at roughly 14 MB each. They are
-deterministic, so re-running the script that wrote them reproduces them byte for byte:
-
-| File | Recreated by |
-| --- | --- |
-| `results/verifica_237_mesi/scenario_monthly_fitA.csv` | `python scripts/verify_237_months.py` |
-| `results/verifica_237_mesi/scenario_monthly_fitB.csv` | `python scripts/verify_237_months.py` |
-| `results/task1/scenario_monthly_fitB_bestfirst.csv` | `python scripts/task1_bestfirst_fitb.py` |
-| `results/task2/scenario_monthly_fitB_matlabpolicy.csv` | `python scripts/task2_matlab_policy.py` |
-
-The aggregated log-ratio files and the text reports in the same folders are small and stay tracked,
-so the conclusions are readable without regenerating anything. Note that these four scripts read the
-`.mat` inputs directly and therefore need the private data.
-
-The MATLAB exports in `results/` are a different matter and stay tracked:
-`results/logratio_green_brown.csv` in particular is the reference the replication is compared
-against, and it cannot be rebuilt without MATLAB.
+The MATLAB exports in `results/` cannot be rebuilt without MATLAB and stay tracked.
+`results/logratio_green_brown.csv` in particular is the reference every comparison here is measured
+against; its provenance is described under [Data availability](#data-availability).
 
 ---
 

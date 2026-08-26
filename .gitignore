@@ -3,10 +3,9 @@ data_private/
 highlights_export/
 *.mat
 
-# Regenerable projection dumps, ~14 MB each. Deterministic output of the
-# verification scripts; see "Regenerable outputs" in the README for which
-# script recreates which file. The MATLAB exports in results/ are NOT covered
-# by this pattern and stay tracked - they cannot be rebuilt without MATLAB.
+# Per-month projection dumps, ~14 MB each, written by working scripts that are
+# not part of this branch. The MATLAB exports in results/ are NOT covered by
+# this pattern and stay tracked - they cannot be rebuilt without MATLAB.
 results/**/scenario_monthly_fit*.csv
 
 # Common raw-data extensions
