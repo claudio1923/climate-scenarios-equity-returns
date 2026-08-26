@@ -177,9 +177,14 @@ agree column by column, with a maximum absolute difference of 0.
 
 Out-of-sample fit is the first thing to look at, and it does part of the job: it establishes that
 all four candidates are viable, none of them failing outright. What it cannot do is separate them.
-Elastic Net 0.389, Random Forest 0.401, Panel 0.404, Gradient Boosting 0.407 — a spread of 0.018
+Elastic Net 0.389, Random Forest 0.401, Panel 0.404, Gradient Boosting 0.406 — a spread of 0.017
 across four very different specifications is a near-tie, not a ranking, and choosing the top of
 such a list would be reading noise.
+
+Those four values come from [`results/oos_model_comparison.csv`](results/oos_model_comparison.csv),
+the record of the comparison as it was run. The metrics table further down gives 0.4070 for the same
+Gradient Boosting model, which is what `evaluate.py` produces today; the two differ in the fourth
+decimal, and a choice between models that differ in the second does not turn on it.
 
 Four further criteria do the separating, by progressive elimination:
 
@@ -385,8 +390,8 @@ file is missing.
 
 Some files in `results/` are exports of results computed before this code existed and are not
 rebuilt by it: `logratio_green_brown.csv`, `scenario_monthly_predictions.csv`,
-`cumulative_returns.csv`, `oos_model_comparison.csv`, `gb_final_metrics.csv`, `en_metrics.csv` and
-`gb_feature_importance.csv`. They are tracked because they cannot be reconstructed without the
+`cumulative_returns.csv`, `oos_model_comparison.csv`, `gb_final_metrics.csv` and `en_metrics.csv`.
+They are tracked because they cannot be reconstructed without the
 proprietary inputs.
 
 ## Citation

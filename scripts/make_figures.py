@@ -113,19 +113,18 @@ def fig_model_comparison():
     the lowest bar on purpose: the point of the figure is how close they are.
     """
     comparison = pd.read_csv(_need(RESULTS / "oos_model_comparison.csv"))
-    metrics = pd.read_csv(_need(RESULTS / "model_metrics.csv"))
-    gb_r2 = float(metrics.loc[metrics["Sample"].str.startswith("out-of-sample"), "R2"].iloc[0])
 
     display = {
         "ElasticNet": "Elastic Net",
         "RandomForest": "Random Forest",
         "Panel": "Panel (linear)",
+        "GradientBoosting": "Gradient Boosting",
     }
-    order = ["ElasticNet", "RandomForest", "Panel"]
+    order = ["ElasticNet", "RandomForest", "Panel", "GradientBoosting"]
     comparison = comparison.set_index("Models").loc[order]
 
-    labels = [display[m] for m in order] + ["Gradient Boosting"]
-    values = list(comparison["R2"]) + [gb_r2]
+    labels = [display[m] for m in order]
+    values = list(comparison["R2"])
     colours = ["#b0b0b0", "#b0b0b0", "#b0b0b0", "#2166ac"]
 
     print("\n[fig_model_comparison] values plotted:")
@@ -150,11 +149,7 @@ def fig_model_comparison():
         )
 
     ax.set_ylabel("Out-of-sample $R^2$")
-    ax.set_title(
-        "Out-of-sample $R^2$ on the sealed 2021-2024 test block\n"
-        "Gradient Boosting refit here; the other three as reported in the thesis",
-        fontsize=11,
-    )
+    ax.set_title("Out-of-sample $R^2$ on the sealed 2021-2024 test block", fontsize=11)
     ax.tick_params(axis="x", labelsize=9)
     ax.grid(axis="y", alpha=0.3)
     ax.set_axisbelow(True)
@@ -164,7 +159,7 @@ def fig_model_comparison():
 # ------------------------------------------------------------------- trajectories
 
 def _logratio_long():
-    """Thesis log-ratio, wide monthly columns reshaped to long."""
+    """Scenario log-ratio, wide monthly columns reshaped to long."""
     wide = pd.read_csv(_need(RESULTS / "logratio_green_brown.csv"))
     long = wide.melt(
         id_vars=["Scenario", "Component", "Sector"],
