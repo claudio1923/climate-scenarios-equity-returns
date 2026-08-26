@@ -53,8 +53,7 @@ The `src/` steps need `data_private/`, which is not distributed (see
 [Data availability](#data-availability)). `scripts/make_tables.py` and the figures built from
 `results/` need no private data.
 
-Some files in `results/` are exports that this code does not rebuild; they are listed under
-[Data availability](#data-availability).
+A few files in `results/` come from elsewhere; see [Data availability](#data-availability).
 
 ---
 
@@ -239,11 +238,11 @@ predictions averaged over them.
 The falsification test is the pivot between two sectors. Shares below are of the interaction budget,
 the 23.2% of total importance that the interaction terms hold between them. Communication carries
 the heaviest share of it — 24%, of which 13.8 percentage points sit on temperature — and it barely
-separates the scenarios (range 0.11). Energy carries less — 16%, of which 14.3 percentage points sit
-on fuel, so nearly all of its share rides on one driver — and it separates everything (range 0.39). The reason is not in the model but in the drivers: temperature paths do
-not diverge across scenarios by 2050, fuel paths do. What matters is the channel, not the weight.
-When the model does not separate, it is because the driver does not separate. Interactions take
-23.2% of the total importance budget, the complement of the 76.8% held by the aggregate terms.
+separates the scenarios (range 0.11). Energy carries less — 16%, of which 14.3 percentage points
+sit on fuel, so nearly all of its share rides on one driver — and it separates everything
+(range 0.39). The reason is not in the model but in the drivers: temperature paths do not diverge
+across scenarios by 2050, fuel paths do. What matters is the channel, not the weight. When the
+model does not separate, it is because the driver does not separate.
 
 ## 4. What the model finds
 
@@ -388,8 +387,9 @@ figures in `figures/`. The code in `src/` is therefore readable end to end but n
 `data_private/`; every module fails with an explicit message pointing to this section when an input
 file is missing.
 
-Most of what is in `results/` is written by the code in `src/`. Three files are not, and they fall
-into two groups.
+Most of what is in `results/` is written by the code in `src/`. The exceptions are of two kinds:
+results that were computed elsewhere and are read here, and one file that the figures are drawn
+from.
 
 **Results this code does not produce.** `scenario_monthly_predictions.csv` carries the scenario
 risk-free path, which is an input to the projection rather than something the model derives, and
