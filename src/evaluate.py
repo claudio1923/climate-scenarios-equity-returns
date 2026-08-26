@@ -1,12 +1,13 @@
 """
-Out-of-sample evaluation on the sealed test block (Split == "test", 2021-2024).
+Evaluation of the selected model on the two samples that matter: the 189 months
+it is estimated on, and the sealed 2021-2024 block it is scored on once.
 
-The thesis numbers are MATLAB numbers. scikit-learn will not reproduce them
-exactly: the two implementations differ in split search, tie breaking and leaf
-fitting. Both are reported side by side and never mixed.
+The test block takes no part in fitting or in selecting the configuration, so
+the out-of-sample figures are an out-of-sample result rather than a selection
+statistic.
 
-Sanity check: if the replicated out-of-sample R2 falls outside 0.35-0.45 the
-run stops instead of writing results.
+Sanity check: if the out-of-sample R2 falls outside 0.35-0.45 the run stops
+instead of writing results.
 """
 
 from pathlib import Path
@@ -16,10 +17,6 @@ import pandas as pd
 
 from build_features import RESULTS
 from train_gb import train
-
-# Thesis values, from oos_model_comparison.csv / gb_final_metrics.csv.
-THESIS_GB_R2_OOS = 0.406
-THESIS_GB_RMSE_OOS = 5.108
 
 R2_SANITY_BAND = (0.35, 0.45)
 
@@ -60,29 +57,19 @@ def evaluate(data=None):
     return metrics, data
 
 
-def comparison_table(metrics):
-    """The replication-vs-thesis table shown in the README."""
+def metrics_table(metrics):
+    """One row per sample, as shown in the README."""
     return pd.DataFrame(
         [
             {
-                "Metric": "R2 out-of-sample",
-                "Thesis (MATLAB)": THESIS_GB_R2_OOS,
-                "Replication (Python)": round(metrics["r2_oos"], 4),
+                "Sample": "in-sample (189 estimation months)",
+                "R2": round(metrics["r2_is"], 4),
+                "RMSE": round(metrics["rmse_is"], 4),
             },
             {
-                "Metric": "RMSE out-of-sample",
-                "Thesis (MATLAB)": THESIS_GB_RMSE_OOS,
-                "Replication (Python)": round(metrics["rmse_oos"], 4),
-            },
-            {
-                "Metric": "R2 in-sample",
-                "Thesis (MATLAB)": 0.7065,
-                "Replication (Python)": round(metrics["r2_is"], 4),
-            },
-            {
-                "Metric": "RMSE in-sample",
-                "Thesis (MATLAB)": 3.8182,
-                "Replication (Python)": round(metrics["rmse_is"], 4),
+                "Sample": "out-of-sample (sealed 2021-2024 block)",
+                "R2": round(metrics["r2_oos"], 4),
+                "RMSE": round(metrics["rmse_oos"], 4),
             },
         ]
     )
@@ -90,14 +77,15 @@ def comparison_table(metrics):
 
 def main():
     metrics, _ = evaluate()
-    table = comparison_table(metrics)
+    table = metrics_table(metrics)
 
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / "replication_vs_thesis_metrics.csv"
+    out = RESULTS / "model_metrics.csv"
     table.to_csv(out, index=False)
 
-    print("Sealed test block (2021-2024), Gradient Boosting.")
+    print("Gradient Boosting.")
     print(table.to_string(index=False))
+    print(f"  gap in R2: {metrics['gap']:.4f}")
     print(f"\nWrote {out.relative_to(Path(__file__).resolve().parents[1])}")
 
 

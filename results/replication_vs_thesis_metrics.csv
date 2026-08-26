@@ -1,5 +1,0 @@
-Metric,Thesis (MATLAB),Replication (Python)
-R2 out-of-sample,0.406,0.407
-RMSE out-of-sample,5.108,5.1058
-R2 in-sample,0.7065,0.7065
-RMSE in-sample,3.8182,3.8182

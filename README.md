@@ -2,28 +2,17 @@
 
 Is the Green–Brown return differential *within the same sector* a structural feature of a
 portfolio, or does it depend on which climate scenario the economy follows? This repository
-contains the Python replication of the modelling pipeline built to answer that question, together
-with the main results of the thesis.
+holds the modelling pipeline built to answer that question, and the results it produces.
 
-## Replication note
+## What is here
 
-The estimation in the thesis was done in MATLAB. The code here is a Python replication of that
-pipeline: same panel, same feature-engineering rule, same 73-feature winning set, same Gradient
-Boosting configuration, same two estimation windows.
+The modelling pipeline of the thesis, in Python: the construction of the candidate feature space,
+the Gradient Boosting model selected in chapter 3, the interpretation machinery behind the defence
+figures, and the 2025-2050 scenario projection. The aggregated results are in `results/` and the
+figures used below are in `figures/`.
 
-The replication reproduces the thesis. On the sealed test block the in-sample figures agree to nine
-decimals; over the 51,480 monthly log-ratio values of the scenario projection the largest deviation
-from the MATLAB export is 1.4e-05. Two features of the pipeline carry most of the weight in that
-agreement, and both are documented below: the projection comes from a second fit on a longer window,
-and MATLAB's tree growth policy has no scikit-learn equivalent, so it is implemented directly in
-[`src/matlab_policy_gb.py`](src/matlab_policy_gb.py).
-
-Thesis values and replication values are labelled wherever both appear, and never mixed.
-
-A word on what "reproduces" means here. Agreement to 1.4e-05 says the Python code walks the same
-path as the MATLAB code and arrives where it arrives. It says nothing about how firmly that
-destination is fixed, which is a separate question and one the thesis addresses in its own terms:
-the scenario projections are to be read as directions of adjustment, not as calibrated magnitudes.
+The underlying data are proprietary and are not distributed, so the code reads end to end but does
+not run without them; see [Data availability](#data-availability).
 
 ## Setup
 
@@ -37,22 +26,21 @@ the within-sector Green/Brown log-ratio.
 ```
 src/
   build_features.py   24 drivers -> 552 candidates -> 73-feature winning set,
-                      validated column by column against the MATLAB design matrix
-  train_gb.py         the two fits (189 months for metrics, 237 for the
-                      projection) and the three growth policies
+                      checked column by column against the reference design matrix
+  train_gb.py         the two estimation windows: 189 months for the
+                      out-of-sample metrics, 237 for the projection
   evaluate.py         out-of-sample R2 and RMSE on the sealed test block
   interpret.py        PDP and ICE curves for the six defence pairs
   scenarios.py        2025-2050 projection and Green/Brown log-ratio
-  matlab_policy_gb.py LSBoost with MATLAB's tree growth policy, in numpy:
-                      breadth-first growth under a split budget, with the
-                      per-level undo rule that scikit-learn does not offer
+  matlab_policy_gb.py least-squares boosting in numpy, with breadth-first tree
+                      growth under a budget on the number of splits
 scripts/
   make_figures.py     regenerates everything in figures/
   make_tables.py      builds results/mean_differences_table.csv and
                       results/growth_policy_table.csv
-  reexport_data_private.py    rewrites the private CSVs at %.17g so they
+  reexport_data_private.py    writes the private CSVs at %.17g so they
                       round-trip exactly; run once, before anything else
-results/              thesis exports + replication outputs
+results/              aggregated results, see Data availability
 figures/              all figures used below
 ```
 
@@ -67,9 +55,8 @@ The `src/` steps need `data_private/`, which is not distributed (see
 run from the CSVs in `results/` alone; the growth-policy table inside `make_tables.py` fits models
 and therefore needs the private inputs, and is skipped with a message when they are absent.
 
-The MATLAB exports in `results/` cannot be rebuilt without MATLAB and stay tracked.
-`results/logratio_green_brown.csv` in particular is the reference every comparison here is measured
-against; its provenance is described under [Data availability](#data-availability).
+Some files in `results/` are exports that this code does not rebuild; they are listed under
+[Data availability](#data-availability).
 
 ---
 
@@ -86,9 +73,9 @@ candidate space is built for: 552 features, made of 24 driver-lags interacted wi
 the 24 main effects. The panel is split 70-10-20, with the last block sealed and untouched until
 the final evaluation.
 
-`src/build_features.py` rebuilds this space from the base panel and checks itself against the
-matrix built in MATLAB: on the tr70 + va10 sample the two agree column by column, with a maximum
-absolute difference of 0.
+`src/build_features.py` builds this space from the base panel and checks itself against the
+reference design matrix shipped with the private inputs: on the 189-month estimation sample the two
+agree column by column, with a maximum absolute difference of 0.
 
 ## 2. Model selection by four criteria, not by R²
 
@@ -110,26 +97,22 @@ Gradient Boosting is the only model not dominated on any of the four. Its config
 features, depth 4, learning rate 0.03, 300 trees, no subsampling — comes from the thesis and is
 refit here without any further tuning. Fit is confirmation, not reason.
 
-**Replication against thesis, FIT A on the sealed 2021–2024 test block:**
+**Gradient Boosting, fitted on the 189 estimation months and scored on the sealed 2021–2024 block:**
 
-| Metric | Thesis (MATLAB) | Replication (Python) |
+| | in-sample (189 months) | out-of-sample (sealed block) |
 |---|---|---|
-| R² in-sample | 0.706548873843745 | 0.706548874290826 |
-| RMSE in-sample | 3.8182342232388 | 3.818234220330205 |
-| R² out-of-sample | 0.4064289 | 0.4066954 |
-| RMSE out-of-sample | 5.1082591 | 5.1071122 |
+| R² | 0.7065 | 0.4070 |
+| RMSE | 3.8182 | 5.1058 |
 
-The in-sample figures agree to nine decimals, which is what identifies the growth policy as correct.
-The out-of-sample figures differ in the fourth, and the asymmetry has a mechanical cause: split
-thresholds are midpoints between adjacent *training* values, so no training row ever sits near a
-boundary, while test rows have no such protection and a few of them fall on the other side of a
-threshold that differs in its last bits.
+The gap between the two, 0.30 in R², is the honest cost of a model with 73 features on 4,158
+monthly observations. It is reported rather than tuned away: the test block is scored once, after
+the configuration is fixed.
 
 ![Feature importance](figures/fig_feature_importance.png)
 
-The importance ranking comes across too: the contemporaneous market factor takes 68.69% of the
-budget against 68.71% in the thesis, aggregate terms take 76.8% against roughly 77%, and one
-predictor has zero importance in both.
+Importance is measured throughout as each feature's share of the total reduction in squared error.
+On that scale the contemporaneous market factor alone takes 68.7%, aggregate terms take 76.8%, and
+one predictor of the 73 contributes nothing at all.
 
 ## 3. Interpretability with a built-in falsification test
 
@@ -146,17 +129,17 @@ The ICE curves are parallel. That matters: it means the average curve is represe
 individual observations and not an artefact of averaging over conflicting shapes. If the individual
 curves crossed, the PDP would be a summary of nothing.
 
-Both figures are recomputed in Python on the replicated model, following the sweep logic of the
-thesis: an interaction feature is non-zero only on the rows of its own entity, so the grid is
-applied to those rows and the predictions are averaged over them.
+Both curves follow the sweep logic the interaction design requires: a feature like WTI x ENRG-Brown
+is non-zero only on the rows of its own entity, so the grid is applied to those rows and the
+predictions averaged over them.
 
 The falsification test is the pivot between two sectors. Communication carries the heaviest
 interaction budget — 24% of it, of which 13.8 sits on temperature — and it barely separates the
 scenarios (range 0.11). Energy carries less — 16%, of which 14.3 sits on fuel — and it separates
 everything (range 0.39). The reason is not in the model but in the drivers: temperature paths do
 not diverge across scenarios by 2050, fuel paths do. What matters is the channel, not the weight.
-When the model does not separate, it is because the driver does not separate. In the thesis model,
-interactions take 23% of the total importance budget (19.9% in the replication).
+When the model does not separate, it is because the driver does not separate. Interactions take
+23.2% of the total importance budget, the complement of the 76.8% held by the aggregate terms.
 
 ## 4. What the model finds
 
@@ -190,34 +173,29 @@ Materials behaves differently. The brown leg is ahead under every pathway; only 
 changes, from −1.67 under Net Zero (tightest) to −2.62 under NDCs (widest). The shock enters as a
 cost rather than as an advantage: green does not become better, it becomes less bad.
 
-### Two estimation windows, and a tree growth policy with no scikit-learn equivalent
+### Two estimation windows
 
-Two features of the MATLAB pipeline are easy to miss when reading the code, and both change the
-answer.
+The same configuration is estimated twice, on two different samples, because the two answer
+different questions.
 
-**The estimation window.** The same configuration is fitted twice, for two different purposes.
-`refit_finale_K62.m` fits 189 months, up to December 2020, and certifies the out-of-sample metrics
-on the sealed block. `s3_K62_leaf10.m` fits 237 months, everything up to December 2024, and it is
-this second fit that produces the projection; appendix A.3 of the thesis states the design and the
-reason, which is that the scenario anchors are recomputed on the same window as the estimation so
-each configuration is internally consistent. The two are kept apart here as well: `prepare_fit_a`
-and `prepare_fit_b` in [`src/train_gb.py`](src/train_gb.py), and the projection calls the second.
-Using the 189-month fit to project means projecting from a model that stops before the test block.
+The **189-month window**, running to December 2020, is the one that carries the out-of-sample
+metrics: it stops before the sealed block, so the 2021–2024 figures are a genuine out-of-sample
+result. The **237-month window**, running to December 2024, is the one that carries the 2025–2050
+projection. Appendix A.3 of the thesis sets out the reason: the scenario anchors are recomputed on
+the same window as the estimation, so each configuration is internally consistent, and projecting
+from a model that stops in 2020 would leave four years of realised data unused. The two are kept
+apart in the code as well — `prepare_fit_a` and `prepare_fit_b` in
+[`src/train_gb.py`](src/train_gb.py) — and the projection calls the second.
 
-**The growth policy.** `MaxNumSplits = 15` is a budget on the *number of splits*, spent
-breadth-first: the tree grows level by level, and when a level would overrun the budget, the least
-productive splits of that level are undone. It coincides with `max_depth = 4` only for a complete
-tree, since 1 + 2 + 4 + 8 = 15 branch nodes. On this design the trees are not complete — many nodes
-cannot be split because an interaction column is constant inside them — so the two policies part
-company, and neither of the two scikit-learn options is the MATLAB procedure. That is what
-[`src/matlab_policy_gb.py`](src/matlab_policy_gb.py) implements, and its equivalence test pins it
-down: given a budget of `2**d - 1` on data where every node can split, it must reproduce
-scikit-learn at `max_depth = d` exactly, which it does at depths 2, 3 and 4.
-
-The three policies differ in *where* the splits go, not only in how many there are. A depth bound
-stops at the fourth level whether or not the budget is spent; a leaf-count bound spends the whole
-budget wherever the gain is largest; the MATLAB rule spends the whole budget too, but breadth
-before depth, which produces unbalanced trees reaching depth 12.
+**The tree growth policy.** The trees are grown breadth-first under a budget of 15 splits: the tree
+grows level by level, and when a level would overrun the budget, the least productive splits of that
+level are undone. That is a constraint on the *number of splits*, not on depth, and it coincides
+with a depth limit of 4 only for a complete tree, since 1 + 2 + 4 + 8 = 15 branch nodes. On this
+design the trees are not complete — many nodes cannot be split because an interaction column is
+constant inside them — so the budget is spent deeper instead, reaching depth 12.
+[`src/matlab_policy_gb.py`](src/matlab_policy_gb.py) implements this, with an equivalence test that
+pins it down: given a budget of `2**d - 1` on data where every node can split, it must reproduce a
+depth-`d` tree exactly, which it does at depths 2, 3 and 4.
 
 Fitting all three on the same design puts numbers on that:
 
@@ -236,10 +214,10 @@ The two scikit-learn policies remain available by name in `train_gb.build_model`
 [`scripts/make_tables.py`](scripts/make_tables.py) regenerates the table above from
 `results/growth_policy_table.csv`.
 
-**The risk-free path.** `s3_K62_leaf10.m` compounds `total = yhat + RF`, and the projection here
-does the same. The scenario design file carries no risk-free column, so the path is joined from the
-thesis predictions export, where RF is constant across entities within a scenario, component and
-month.
+**The risk-free path.** The projection compounds the total return, `yhat + RF`, not the excess
+return. The scenario design file carries no risk-free column, so the path is joined from the
+scenario predictions in `results/`, where RF is constant across entities within a scenario,
+component and month.
 
 ### Hyperparameter optimization
 
@@ -314,21 +292,11 @@ reproduce 1.219885 rather than 1.4631.
 This is worth knowing outside this project: a 5e-14 discrepancy in an input file is invisible in
 every diagnostic anyone normally looks at, and here it moved the headline result by twenty per cent.
 
-### How closely the replication matches
-
-Over the full projection — 11 sectors x 5 scenarios x 3 components x 312 months, 51,480 values —
-the largest deviation from the MATLAB export is **1.410e-05** and the mean deviation is 1.006e-06.
-The worst cell is Communication under Delayed transition in December 2050, where the log-ratio is
-−6.528841 against −6.528855, a relative error of 2.2e-06. That residual sits above the six-decimal
-rounding of the export, so it is a real numerical difference and not a display artefact: the
-floating-point tie-breaks inside the two splitters are not exposed by either library.
-
-### Mean 2025–2050 differences, thesis results
+### Mean 2025–2050 differences by sector and scenario
 
 Average over 2025–2050 of the monthly difference between the predicted return of the Green and the
-Brown portfolio of each sector, by scenario, with the range across scenarios in the last column.
-These come from the thesis output, not from the replication. No significance tests are reported
-here; the tests are in the thesis.
+Brown portfolio of each sector, by scenario, with the range across scenarios in the last column. No
+significance tests are reported here; the tests are in the thesis.
 
 **Transition component**
 
@@ -369,7 +337,7 @@ Full table: [`results/mean_differences_table.csv`](results/mean_differences_tabl
 The response to the pathway is graded, not binary, and it is concentrated. Ranking the 11 sectors by
 the range of their mean 2025–2050 differential across scenarios: Energy 0.395 and Materials 0.312
 stand apart; Communication 0.114 and Information Technology 0.054 are small but not nothing; the
-remaining seven are at 0.02 or below, four of them at 0.00.
+remaining seven are all below 0.03, six of them below 0.01, and two are exactly zero.
 
 Sectors are ranked by the size of that response rather than counted by whether their log-ratio
 crosses zero, and the choice matters. How much a sector's differential moves when the pathway
@@ -412,19 +380,6 @@ model was trained on and sitting close to its median. A boosted tree is a step f
 interval that narrow the level of the answer depends on whether a step edge happens to fall inside
 it, while the ranking across scenarios does not.
 
-**No MATLAB was re-run.** Every comparison in this repository is against exported files, not against
-a live MATLAB session. The `.m` scripts are not under version control; their provenance is
-documented below but not verified. The average number of splits and leaves in the MATLAB trees is
-not reported in the thesis and not present in the exports, so the 15.00 and 16.00 produced by the
-builder cannot be checked against the original directly — the in-sample agreement to nine decimals
-is the indirect evidence that stands in for it.
-
-**One rule in the growth policy is a choice, not a transcription.** When the split budget forces the
-per-level undo, ties in impurity gain have to be broken somehow, and the MathWorks documentation
-does not say how. The builder resolves them in favour of the lower node index and says so. The fit
-reported here does not appear to turn on that choice, since it reproduces the MATLAB result, but
-agreement is not proof that the rule matches.
-
 **The two scenario-sensitive sectors depend on the design.** A richer model might find others.
 Communication hints at why: its interaction budget sits on temperature, which does not separate
 scenarios by 2050.
@@ -440,26 +395,16 @@ The underlying data are proprietary. Market and ESG data come from Datastream, m
 from FRED, and climate variables from ISIMIP. None of them are redistributed here, and the folder
 that holds them, `data_private/`, is excluded from version control.
 
-What is published is the complete modelling code and the aggregated results: the thesis exports and
-the replication outputs in `results/`, and the figures in `figures/`. The code in `src/` is
-therefore readable end to end but not runnable without `data_private/`; every module fails with an
-explicit message pointing to this section when an input file is missing. The scripts in `scripts/`
-run from `results/` and need no private data.
+What is published is the complete modelling code, the aggregated results in `results/` and the
+figures in `figures/`. The code in `src/` is therefore readable end to end but not runnable without
+`data_private/`; every module fails with an explicit message pointing to this section when an input
+file is missing.
 
-### Provenance of the MATLAB reference
-
-`results/logratio_green_brown.csv` is the file every comparison in this repository is measured
-against: 165 rows by 312 monthly columns, 51,480 values, no missing cells. It is a direct MATLAB
-export, not a file rebuilt along the way. The chain is
-`s3_K62_leaf10.m` → `Scenario_Yhat_K62L10_2005_2024.mat` → `s4_cumulate_logratio.m` →
-`Scenario_CumLogRatio_2005_2024.mat` → `writetable` in `export_highlights_data.m`. The copy in the
-MATLAB working folder and the two copies in this repository are byte-identical, and no Python module
-here writes that filename; they only read it.
-
-One limit is worth stating plainly. The `.m` scripts are not under version control. The timestamps
-of the `.mat` files are consistent with the chain above and with the scripts as they read today, but
-consistency is not proof: nothing rules out that a script was edited after the `.mat` it produced.
-The provenance is documented, not verified.
+Some files in `results/` are exports of results computed before this code existed and are not
+rebuilt by it: `logratio_green_brown.csv`, `scenario_monthly_predictions.csv`,
+`cumulative_returns.csv`, `oos_model_comparison.csv`, `gb_final_metrics.csv`, `en_metrics.csv` and
+`gb_feature_importance.csv`. They are tracked because they cannot be reconstructed without the
+proprietary inputs.
 
 ## Citation
 

@@ -112,18 +112,12 @@ def pretty_feature(name, entity_names):
 
 def fig_model_comparison():
     """
-    Out-of-sample R2 of the four models. The y axis starts just below the lowest
-    bar on purpose: the point of the figure is how close the four models are.
-
-    The Gradient Boosting bar is the value this repository produces on FIT A;
-    the other three are the thesis figures from oos_model_comparison.csv, which
-    were not re-estimated here.
+    Out-of-sample R2 of the four candidate models. The y axis starts just below
+    the lowest bar on purpose: the point of the figure is how close they are.
     """
     comparison = pd.read_csv(_need(RESULTS / "oos_model_comparison.csv"))
-    metrics = pd.read_csv(_need(RESULTS / "replication_vs_thesis_metrics.csv"))
-    gb_r2 = float(
-        metrics.loc[metrics["Metric"] == "R2 out-of-sample", "Replication (Python)"].iloc[0]
-    )
+    metrics = pd.read_csv(_need(RESULTS / "model_metrics.csv"))
+    gb_r2 = float(metrics.loc[metrics["Sample"].str.startswith("out-of-sample"), "R2"].iloc[0])
 
     display = {
         "ElasticNet": "Elastic Net",
