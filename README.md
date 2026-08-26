@@ -48,7 +48,8 @@ src/
                       per-level undo rule that scikit-learn does not offer
 scripts/
   make_figures.py     regenerates everything in figures/
-  make_tables.py      builds results/mean_differences_table.csv
+  make_tables.py      builds results/mean_differences_table.csv and
+                      results/growth_policy_table.csv
   reexport_data_private.py    rewrites the private CSVs at %.17g so they
                       round-trip exactly; run once, before anything else
 results/              thesis exports + replication outputs
@@ -62,8 +63,9 @@ python src/build_features.py && python src/train_gb.py && python src/evaluate.py
 ```
 
 The `src/` steps need `data_private/`, which is not distributed (see
-[Data availability](#data-availability)). `scripts/make_tables.py` and the thesis-based figures run
-from the CSVs in `results/` alone.
+[Data availability](#data-availability)). The thesis-based figures and the mean-differences table
+run from the CSVs in `results/` alone; the growth-policy table inside `make_tables.py` fits models
+and therefore needs the private inputs, and is skipped with a message when they are absent.
 
 The MATLAB exports in `results/` cannot be rebuilt without MATLAB and stay tracked.
 `results/logratio_green_brown.csv` in particular is the reference every comparison here is measured
@@ -188,47 +190,85 @@ Materials behaves differently. The brown leg is ahead under every pathway; only 
 changes, from −1.67 under Net Zero (tightest) to −2.62 under NDCs (widest). The shock enters as a
 cost rather than as an advantage: green does not become better, it becomes less bad.
 
-### Why the projection needed two things to come out right
+### Two estimation windows, and a tree growth policy with no scikit-learn equivalent
 
-The Python projection first came out at a spread of 0.25 against the thesis 1.22. Two independent
-causes accounted for the gap, and neither was sufficient on its own.
+Two features of the MATLAB pipeline are easy to miss when reading the code, and both change the
+answer.
 
-**The estimation window.** The MATLAB pipeline fits the same configuration twice. `refit_finale_K62.m`
-fits 189 months, up to December 2020, and exists to certify the out-of-sample metrics on the sealed
-block. `s3_K62_leaf10.m` fits 237 months, everything up to December 2024, and it is this second fit
-that produces the projection — the design is stated in appendix A.3 of the thesis. The Python side
-was projecting from the 189-month fit, that is, from a model that stops before the test block.
+**The estimation window.** The same configuration is fitted twice, for two different purposes.
+`refit_finale_K62.m` fits 189 months, up to December 2020, and certifies the out-of-sample metrics
+on the sealed block. `s3_K62_leaf10.m` fits 237 months, everything up to December 2024, and it is
+this second fit that produces the projection; appendix A.3 of the thesis states the design and the
+reason, which is that the scenario anchors are recomputed on the same window as the estimation so
+each configuration is internally consistent. The two are kept apart here as well: `prepare_fit_a`
+and `prepare_fit_b` in [`src/train_gb.py`](src/train_gb.py), and the projection calls the second.
+Using the 189-month fit to project means projecting from a model that stops before the test block.
 
-**The tree growth policy.** `MaxNumSplits = 15` is a budget on the number of splits, spent
-breadth-first, not a depth limit. It coincides with `max_depth = 4` only for a complete tree, since
-1 + 2 + 4 + 8 = 15 branch nodes. The trees here are not complete, so the two policies part company:
-`max_depth = 4` averaged 8.7 splits per tree, and that shortfall was truncation, not an unused
-budget — nodes at the fourth level were still splittable and scikit-learn closed them anyway. Under
-the MATLAB policy every one of the 300 trees spends all 15 splits, reaching depth 12.
+**The growth policy.** `MaxNumSplits = 15` is a budget on the *number of splits*, spent
+breadth-first: the tree grows level by level, and when a level would overrun the budget, the least
+productive splits of that level are undone. It coincides with `max_depth = 4` only for a complete
+tree, since 1 + 2 + 4 + 8 = 15 branch nodes. On this design the trees are not complete — many nodes
+cannot be split because an interaction column is constant inside them — so the two policies part
+company, and neither of the two scikit-learn options is the MATLAB procedure. That is what
+[`src/matlab_policy_gb.py`](src/matlab_policy_gb.py) implements, and its equivalence test pins it
+down: given a budget of `2**d - 1` on data where every node can split, it must reproduce
+scikit-learn at `max_depth = d` exactly, which it does at depths 2, 3 and 4.
 
-The difference from best-first growth is therefore not *how many* splits but *where* they go.
-Level-wise growth spends them on breadth before depth; best-first spends them wherever the gain is
-largest. scikit-learn offers both `max_depth` and `max_leaf_nodes` and neither is the MATLAB
-procedure, which is why [`src/matlab_policy_gb.py`](src/matlab_policy_gb.py) exists.
+The three policies differ in *where* the splits go, not only in how many there are. A depth bound
+stops at the fourth level whether or not the budget is spent; a leaf-count bound spends the whole
+budget wherever the gain is largest; the MATLAB rule spends the whole budget too, but breadth
+before depth, which produces unbalanced trees reaching depth 12.
 
-The three policies bracket the thesis on every axis at once, which is what makes the match
-non-accidental:
+Fitting all three on the same design puts numbers on that:
 
 | Growth policy | R² in-sample | R² out-of-sample | splits/tree | Energy 2050 spread |
 |---|---|---|---|---|
-| `max_depth=4`, level-wise truncated | 0.6503 | 0.4103 | 8.74 | 0.5213 |
-| **numpy builder, MATLAB policy** | **0.7065** | **0.4067** | **15.00** | **1.2199** |
-| `max_leaf_nodes=16`, best-first | 0.7192 | 0.3965 | 15.00 | 1.4251 |
+| scikit-learn `max_depth=4`, level-wise, truncated at depth 4 | 0.6503 | 0.4103 | 8.74 | 0.5213 |
+| **numpy builder, level-wise under a 15-split budget** | **0.7065** | **0.4070** | **15.00** | **1.2199** |
+| scikit-learn `max_leaf_nodes=16`, best-first | 0.7192 | 0.3965 | 15.00 | 1.4251 |
 | thesis (MATLAB) | 0.7065 | 0.4064 | not reported | 1.2199 |
 
-The thesis sits between the two scikit-learn policies on in-sample fit, out-of-sample fit and
-projection simultaneously, and in the direction level-wise growth predicts. The two variants are
-kept in the code as labelled diagnostics for that reason.
+The budget policy is bracketed by the two approximations on in-sample fit, on out-of-sample fit and
+on the projection at the same time, and it lands where breadth-first growth predicts on each. Three
+independent axes agreeing is why the match to the thesis is not treated as a coincidence.
 
-**The risk-free path.** `s3_K62_leaf10.m` compounds `total = yhat + RF`. The Python projection was
-compounding `yhat` alone, which is a missing term rather than a refinement. The scenario design file
-carries no risk-free column, so the path is joined from the thesis predictions export, where RF is
-constant across entities within a scenario, component and month.
+The two scikit-learn policies remain available by name in `train_gb.build_model`, and
+[`scripts/make_tables.py`](scripts/make_tables.py) regenerates the table above from
+`results/growth_policy_table.csv`.
+
+**The risk-free path.** `s3_K62_leaf10.m` compounds `total = yhat + RF`, and the projection here
+does the same. The scenario design file carries no risk-free column, so the path is joined from the
+thesis predictions export, where RF is constant across entities within a scenario, component and
+month.
+
+### Where the configuration comes from
+
+The hyper-parameters above are not selected in this repository. They are taken from the thesis,
+which searched for them, and are quoted here so a reader is not left to assume they were tuned in
+Python.
+
+The feature set was fixed first, and before any tuning. A deliberately permissive reference model —
+learning rate 0.01, four leaves, minimum leaf size 10 — was fitted on all 552 candidates, and only
+101 of them came out with positive importance. Reading that ranking at 99% of cumulative importance
+gives the smallest window that reaches the threshold, K = 62, to which the thesis adds the 23 forced
+market terms (contemporaneous ExMkt and its 22 entity interactions, eleven of which fell outside the
+window and were restored). That gives the 73-feature set used everywhere here, and it does not
+change afterwards.
+
+The hyper-parameters were then searched over the grid of table 3.6 of the thesis: learning rate in
+{0.02, 0.03, 0.05, 0.07, 0.10}, with the number of trees tied to it as M = round(900 × 0.01 / η), so
+{450, 300, 180, 129, 90}; depth in {3, 4, 5}; minimum leaf size in {5, 8, 10, 12, 15, 20, 30};
+subsampling rate in {0.5, 0.8, 1.0}. Selection ran in two stages on a 24-month validation window,
+scored by validation RMSE — every combination first, five seeds for the stochastic settings and a
+single fit for the deterministic ones, then the finalists reconfirmed over 30 seeds. The winner was
+refitted on all 189 training months and evaluated once on the sealed block. For the projection the
+same values are held fixed and only the sample changes, which is the refit described in appendix A.3.
+
+One thing the table of growth policies is *not*: it is not that search. `max_depth=4` and
+`max_leaf_nodes=16` were never candidates for selection, and no criterion in the thesis ever
+compared them. They are two ways of approximating the single constraint `MaxNumSplits = 15` in a
+library that does not offer it, and they appear here only to show where the correct policy sits
+between them.
 
 ### Reading a CSV is not free
 

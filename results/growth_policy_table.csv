@@ -1,0 +1,4 @@
+Policy,Description,R2_is_fitA,R2_oos_fitA,SplitsPerTree,LeavesPerTree,EnergySpread2050_fitB
+sklearn_depth4,"scikit-learn max_depth=4, level-wise truncated at depth 4",0.6503,0.4103,8.74,9.74,0.5213
+matlab_policy,"numpy builder, level-wise under a 15-split budget",0.7065,0.407,15.0,16.0,1.2199
+sklearn_bestfirst,"scikit-learn max_leaf_nodes=16, best-first",0.7192,0.3965,15.0,16.0,1.4251
