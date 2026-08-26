@@ -13,10 +13,10 @@ Boosting configuration, same two estimation windows.
 
 The replication reproduces the thesis. On the sealed test block the in-sample figures agree to nine
 decimals; over the 51,480 monthly log-ratio values of the scenario projection the largest deviation
-from the MATLAB export is 1.4e-05. Getting there required two things that are easy to miss, and
-both are documented below: the projection is produced by a second fit on a longer window, and
-MATLAB's tree growth policy has no equivalent in scikit-learn and had to be written out
-([`src/matlab_policy_gb.py`](src/matlab_policy_gb.py)).
+from the MATLAB export is 1.4e-05. Two features of the pipeline carry most of the weight in that
+agreement, and both are documented below: the projection comes from a second fit on a longer window,
+and MATLAB's tree growth policy has no scikit-learn equivalent, so it is implemented directly in
+[`src/matlab_policy_gb.py`](src/matlab_policy_gb.py).
 
 Thesis values and replication values are labelled wherever both appear, and never mixed.
 
@@ -241,34 +241,58 @@ does the same. The scenario design file carries no risk-free column, so the path
 thesis predictions export, where RF is constant across entities within a scenario, component and
 month.
 
-### Where the configuration comes from
+### Hyperparameter optimization
 
-The hyper-parameters above are not selected in this repository. They are taken from the thesis,
-which searched for them, and are quoted here so a reader is not left to assume they were tuned in
-Python.
+The four values quoted above — depth 4, learning rate 0.03, 300 trees, minimum leaf size 10 — are
+the output of a hyperparameter optimization carried out in the thesis. They are not tuned in this
+repository, and they are not hand-picked: the procedure, its search space and its selection
+criterion are all fixed in advance, and are recorded here so that a reader can see which they are.
 
-The feature set was fixed first, and before any tuning. A deliberately permissive reference model —
-learning rate 0.01, four leaves, minimum leaf size 10 — was fitted on all 552 candidates, and only
-101 of them came out with positive importance. Reading that ranking at 99% of cumulative importance
-gives the smallest window that reaches the threshold, K = 62, to which the thesis adds the 23 forced
-market terms (contemporaneous ExMkt and its 22 entity interactions, eleven of which fell outside the
-window and were restored). That gives the 73-feature set used everywhere here, and it does not
-change afterwards.
+**Feature selection is settled before the search begins.** A deliberately permissive reference model
+— learning rate 0.01, four leaves, minimum leaf size 10 — is fitted on all 552 candidates, and 101
+of them come out with positive importance. Reading that ranking at 99% of cumulative importance
+gives the smallest top-K window that reaches the threshold, K = 62, to which the thesis adds 23
+forced market terms (contemporaneous ExMkt and its 22 entity interactions, eleven of which fall
+outside the window and are restored). The resulting 73-feature set is fixed from that point on. It
+is chosen before the grid is entered and never revisited afterwards, so the search cannot quietly
+select features and hyper-parameters against the same data.
 
-The hyper-parameters were then searched over the grid of table 3.6 of the thesis: learning rate in
-{0.02, 0.03, 0.05, 0.07, 0.10}, with the number of trees tied to it as M = round(900 × 0.01 / η), so
-{450, 300, 180, 129, 90}; depth in {3, 4, 5}; minimum leaf size in {5, 8, 10, 12, 15, 20, 30};
-subsampling rate in {0.5, 0.8, 1.0}. Selection ran in two stages on a 24-month validation window,
-scored by validation RMSE — every combination first, five seeds for the stochastic settings and a
-single fit for the deterministic ones, then the finalists reconfirmed over 30 seeds. The winner was
-refitted on all 189 training months and evaluated once on the sealed block. For the projection the
-same values are held fixed and only the sample changes, which is the refit described in appendix A.3.
+**Search space.** An exhaustive grid, defined a priori, over
 
-One thing the table of growth policies is *not*: it is not that search. `max_depth=4` and
-`max_leaf_nodes=16` were never candidates for selection, and no criterion in the thesis ever
+| Axis | Values |
+|---|---|
+| learning rate η | 0.02, 0.03, 0.05, 0.07, 0.10 |
+| number of learners M | tied to η as M = round(900 × 0.01 / η): 450, 300, 180, 129, 90 |
+| tree depth | 3, 4, 5 |
+| minimum leaf size | 5, 8, 10, 12, 15, 20, 30 |
+| subsample rate | 0.5, 0.8, 1.0 |
+
+That is 5 × 3 × 7 × 3 = **315 configurations**. The number of learners is not a free axis: it is
+pinned to the learning rate so that η × M is the same across the grid — 9 in every cell, up to the
+rounding of M — which holds the total amount of learning constant and stops the comparison turning
+into a contest between long slow runs and short fast ones.
+
+**Validation window and selection criterion.** Selection is scored by RMSE on a held-out 24-month
+validation window, in two stages. The first pass scores all 315 configurations — five seeds each for
+the stochastic settings, a single fit for the deterministic ones, which are deterministic precisely
+because subsampling is off. The finalists are then re-scored over 30 seeds, so that a configuration
+cannot win on a lucky initialisation: the second stage separates the signal from initialisation
+variance.
+
+**Sealed test set.** The 2021–2024 block takes no part in any of this. It is not used to score
+candidates, not used to pick finalists, and not consulted between stages. The selected configuration
+is refitted on the 189 training months and evaluated against that block exactly once, which is what
+makes the reported out-of-sample figures an out-of-sample result rather than a selection statistic.
+
+**Refit for the projection.** For the 2025–2050 projection the same hyper-parameters are held fixed
+and only the estimation sample changes, to the full 237 months. Appendix A.3 of the thesis describes
+that refit and the reason for it. No re-optimization happens on the longer window.
+
+One thing the table of growth policies above is *not*: it is not part of this search.
+`max_depth=4` and `max_leaf_nodes=16` were never candidates, and no criterion in the thesis ever
 compared them. They are two ways of approximating the single constraint `MaxNumSplits = 15` in a
-library that does not offer it, and they appear here only to show where the correct policy sits
-between them.
+library that does not offer it, and they appear only to show where the correct policy sits between
+them.
 
 ### Reading a CSV is not free
 
@@ -347,11 +371,14 @@ the range of their mean 2025–2050 differential across scenarios: Energy 0.395 
 stand apart; Communication 0.114 and Information Technology 0.054 are small but not nothing; the
 remaining seven are at 0.02 or below, four of them at 0.00.
 
-An earlier version of this section counted sectors by whether their log-ratio crosses zero — "nine
-structural, two move, one inverts". That count is not reported any more, because it classifies
-sectors by a threshold that is not stable. Crossing zero is a property of the level, and the level
-shifts with the estimation window. Ranking by response is the more durable statement, and it does
-not need a cut-off: Energy first by a wide margin, Materials second, everything else far behind.
+Sectors are ranked by the size of that response rather than counted by whether their log-ratio
+crosses zero, and the choice matters. How much a sector's differential moves when the pathway
+changes is a property of the sector: it is the gap between what the model predicts under one set of
+driver paths and another, and nothing outside the sector fixes its size. Crossing zero is a
+different kind of quantity. It depends on the level the differential happens to sit around, and
+that level shifts with the estimation window — appendix A.3 of the thesis makes the same point.
+Ranking by response also needs no cut-off, so nothing hinges on where a boundary is drawn: Energy
+first by a wide margin, Materials second, everything else far behind.
 
 So the answer to the research question is not "structural" and not "conditional", but conditional in
 a specific place and through a specific channel. In Energy the channel is fuel, and the pathways
