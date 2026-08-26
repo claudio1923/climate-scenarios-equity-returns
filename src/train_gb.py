@@ -1,40 +1,38 @@
 """
-The two fits of the thesis, and the three tree growth policies.
+The two estimation windows, and the tree growth policy.
 
-Two fits, never one
--------------------
-The MATLAB pipeline estimates the same configuration twice, and the two are used
-for different things:
+Two windows, never one
+----------------------
+The same configuration is estimated twice, and the two are used for different
+things:
 
-    FIT A   189 months, tr70 + va10, up to December 2020   (refit_finale_K62.m)
-            certifies the out-of-sample metrics on the sealed 2021-2024 block
-    FIT B   237 months, everything up to December 2024      (s3_K62_leaf10.m)
-            produces the 2025-2050 scenario projection
+    FIT A   189 months, up to December 2020
+            carries the out-of-sample metrics on the sealed 2021-2024 block
+    FIT B   237 months, everything up to December 2024
+            carries the 2025-2050 scenario projection
 
 Appendix A.3 of the thesis states the design: the model is re-estimated with the
 hyper-parameters held at the chapter 3 values, and the scenario anchors are
 recomputed on the same window as the estimation, so each configuration is
-internally consistent. Using FIT A to project, or FIT B to report out-of-sample
-metrics, mixes the two and is wrong in both directions: FIT B has seen the test
-block, and FIT A projects from a model that stops in 2020.
+internally consistent. Projecting from FIT A, or reporting out-of-sample metrics
+from FIT B, mixes the two and is wrong in both directions: FIT B has seen the
+test block, and FIT A stops in 2020.
 
-Three growth policies
----------------------
-MaxNumSplits is a budget on the number of splits, spent breadth-first, and
-scikit-learn has no equivalent. The default here is the numpy builder that
-follows the documented MATLAB procedure; the two scikit-learn policies are kept
-as labelled diagnostics, because together the three bracket the thesis on
-in-sample fit, out-of-sample fit and projection at once:
-
-    max_depth=4        level-wise, truncated at depth 4     projection 0.5213
-    matlab_policy      level-wise under a 15-split budget   projection 1.2199
-    max_leaf_nodes=16  best-first, 15 splits                projection 1.4251
+Tree growth
+-----------
+The trees are grown breadth-first under a budget of 15 splits, which is what the
+grid means by depth 4: a complete tree of depth 4 has 1 + 2 + 4 + 8 = 15 branch
+nodes. The trees here are not complete, so the budget is spent deeper and they
+reach depth 12. scikit-learn has neither policy - max_depth bounds the depth
+rather than the count, max_leaf_nodes switches to best-first growth - so the
+default is the numpy builder in matlab_policy_gb.py. The two scikit-learn
+variants stay reachable by name for anyone who wants to see what a different
+constraint does.
 
 No tuning happens in this module. The screening of the 552 candidates down to
-the 73-feature winning set, and the two-stage validation that fixed depth, leaf
-size, learning rate, number of trees and the subsampling rate, were done in
-MATLAB as part of the thesis. Only the selected configuration is refitted, so
-the Python results are a replication and not a second, independent search.
+the 73-feature set, and the search that fixed the learning rate, the number of
+learners, the split budget and the leaf size, were carried out in the thesis;
+this module fits the selected configuration and nothing else.
 """
 
 from pathlib import Path
@@ -193,7 +191,7 @@ def main():
     )
 
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / "replication_gb_feature_importance.csv"
+    out = RESULTS / "model_feature_importance.csv"
     table.to_csv(out, index=False)
 
     shape = data["model"].tree_shape()

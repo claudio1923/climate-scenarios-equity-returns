@@ -1,6 +1,6 @@
 """
 Partial dependence (PDP) and individual conditional expectation (ICE) curves,
-recomputed in Python on the replicated model.
+computed on the fitted model.
 
 This follows the logic of the calcPDP routine of the thesis. For an interaction
 feature driver_x_Entity_e the sweep is local by construction: the column is only
@@ -110,8 +110,8 @@ def main():
     pdp, ice = compute_all()
 
     RESULTS.mkdir(exist_ok=True)
-    pdp_out = RESULTS / "replication_pdp_curves.csv"
-    ice_out = RESULTS / "replication_ice_curves.csv"
+    pdp_out = RESULTS / "model_pdp_curves.csv"
+    ice_out = RESULTS / "model_ice_curves.csv"
     pdp.to_csv(pdp_out, index=False)
     ice.to_csv(ice_out, index=False)
 

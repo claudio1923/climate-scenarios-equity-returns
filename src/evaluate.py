@@ -51,7 +51,7 @@ def evaluate(data=None):
     low, high = R2_SANITY_BAND
     if not (low <= metrics["r2_oos"] <= high):
         raise ValueError(
-            f"Sanity check failed: replicated out-of-sample R2 = {metrics['r2_oos']:.4f}, "
+            f"Sanity check failed: out-of-sample R2 = {metrics['r2_oos']:.4f}, "
             f"outside the expected band [{low}, {high}]. Stopping instead of publishing."
         )
     return metrics, data

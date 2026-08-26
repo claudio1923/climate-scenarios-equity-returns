@@ -1,17 +1,14 @@
 """
 Regenerate every figure in figures/.
 
-Sources are kept separate and always labelled:
-  - thesis results  -> results/*.csv exported from the MATLAB pipeline
-  - replication     -> results/replication_*.csv, produced by the modules in src/
-                       from the two fits (189 months for metrics, 237 for the
-                       scenario projection)
+Inputs come from results/: the aggregated scenario results, and the model
+outputs written by the modules in src/.
 
 The trajectory panels are drawn as single lines, with no band around them: they
 are point projections and nothing in this repository estimates a distribution
 around them.
 
-Run the src/ modules first (they write the replication CSVs), then:
+Run the src/ modules first (they write the CSVs used here), then:
     python scripts/make_figures.py
 """
 
@@ -253,7 +250,7 @@ def fig_trajectories(sector, sector_name, filename):
 
 def fig_pdp():
     """Two rows by three columns, one panel per defence pair."""
-    pdp = pd.read_csv(_need(RESULTS / "replication_pdp_curves.csv"))
+    pdp = pd.read_csv(_need(RESULTS / "model_pdp_curves.csv"))
     pairs = list(dict.fromkeys(pdp["Pair"]))
 
     print("\n[fig_pdp_2x3] vertical range of each average curve (max - min):")
@@ -271,15 +268,15 @@ def fig_pdp():
         ax.grid(alpha=0.3)
         ax.set_axisbelow(True)
 
-    fig.suptitle("Partial dependence, recomputed on the replicated model", fontsize=12)
+    fig.suptitle("Partial dependence over the six defence pairs", fontsize=12)
     fig.tight_layout()
     _save(fig, "fig_pdp_2x3.png")
 
 
 def fig_ice():
     """Same six pairs: thin grey individual curves with the average on top."""
-    ice = pd.read_csv(_need(RESULTS / "replication_ice_curves.csv"))
-    pdp = pd.read_csv(_need(RESULTS / "replication_pdp_curves.csv"))
+    ice = pd.read_csv(_need(RESULTS / "model_ice_curves.csv"))
+    pdp = pd.read_csv(_need(RESULTS / "model_pdp_curves.csv"))
     pairs = list(dict.fromkeys(pdp["Pair"]))
 
     fig, axes = plt.subplots(2, 3, figsize=(13, 7))
@@ -302,8 +299,7 @@ def fig_ice():
         ax.set_axisbelow(True)
 
     fig.suptitle(
-        "Individual conditional expectation curves (grey) and their average (black),\n"
-        "recomputed on the replicated model",
+        "Individual conditional expectation curves (grey) and their average (black)",
         fontsize=12,
     )
     fig.tight_layout()
@@ -321,7 +317,7 @@ def fig_feature_importance(top_n=15):
     already known. It is dropped and the remaining shares are renormalised, so
     the figure answers "what matters once the market is taken out".
     """
-    importance = pd.read_csv(_need(RESULTS / "replication_gb_feature_importance.csv"))
+    importance = pd.read_csv(_need(RESULTS / "model_feature_importance.csv"))
 
     market_share = float(importance.loc[importance["Feature"] == "ExMkt_L0", "SharePct"].iloc[0])
     without_market = importance[importance["Feature"] != "ExMkt_L0"].copy()

@@ -1,26 +1,21 @@
 """
-Scenario projection 2025-2050 with the replicated model.
+Scenario projection, 2025-2050.
 
-scenario_design_K62.csv already contains the 73 features built in MATLAB for
-every Scenario x Component x Entity x month, so this step only applies the
-Python model to that design and aggregates the predictions the same way the
-thesis does:
+scenario_design_K62.csv holds the 73 features for every Scenario x Component x
+Entity x month, so this step applies the model to that design and aggregates:
 
     cumulative index   = prod(1 + r_t / 100)
     log-ratio (sector) = log(cum of the Green portfolio) - log(cum of the Brown one)
 
-Compounding uses the total return, exactly as s3_K62_leaf10.m does:
-
-    total = yhat + RF
-
-scenario_design_K62.csv carries no risk-free column, so the path is joined from
+Compounding uses the total return, total = yhat + RF. The design file carries no
+risk-free column, so the path is joined from
 results/scenario_monthly_predictions.csv, where RF is constant across entities
 within a Scenario x Component x month. The risk-free leg is not optional and not
 a refinement: leaving it out changes the log-ratio.
 
 "Current Policies" appears in the design file with the physical component only.
-It carries no risk-free path and is not part of the five-scenario set reported in
-the thesis, so it is dropped before compounding, as s3_K62_leaf10.m does.
+It carries no risk-free path and is not one of the five scenarios reported, so it
+is dropped before compounding.
 """
 
 from pathlib import Path
@@ -37,7 +32,7 @@ KEY_COLS = ["Entity", "EntityLabel", "Green", "Scenario", "Component", "Date", "
 REFERENCE_SCENARIOS = ("current policies", "baseline")
 
 
-THESIS_SCENARIOS = [
+SCENARIOS = [
     "Net Zero 2050",
     "Delayed transition",
     "Below 2°C",
@@ -87,12 +82,12 @@ def log_ratio(predictions, risk_free=None):
     Compound each portfolio on the total return, then take the within-sector
     Green/Brown log-ratio. Returns Scenario, Component, Sector, Date, LogRatio.
 
-    Follows s3_K62_leaf10.m: total = yhat + RF, compounded, then the log-ratio.
+    Compounds total = yhat + RF, then takes the log-ratio.
     """
     risk_free = load_risk_free() if risk_free is None else risk_free
 
-    # Reference scenarios carry no risk-free path and are not part of the five
-    # reported in the thesis; s3_K62_leaf10.m drops them before compounding.
+    # Reference scenarios carry no risk-free path and are not among the five
+    # reported, so they are dropped before compounding.
     lowered = predictions["Scenario"].str.lower()
     is_reference = np.zeros(len(predictions), dtype=bool)
     for token in REFERENCE_SCENARIOS:
@@ -123,95 +118,33 @@ def log_ratio(predictions, risk_free=None):
     return ratio.sort_values(keys).reset_index(drop=True)
 
 
-def thesis_log_ratio():
-    """The thesis log-ratio, reshaped long, for the qualitative comparison."""
-    wide = pd.read_csv(_require(RESULTS / "logratio_green_brown.csv"))
-    long = wide.melt(
-        id_vars=["Scenario", "Component", "Sector"],
-        var_name="Month",
-        value_name="LogRatioThesis",
-    )
-    # Column names look like d2050_12.
-    long["Date"] = pd.to_datetime(long["Month"].str.slice(1).str.replace("_", "-"), format="%Y-%m")
-    long["Date"] = long["Date"] + pd.offsets.MonthEnd(0)
-    return long.drop(columns="Month")
-
-
-def comparison_2050(replication):
-    """End-of-horizon comparison, replication against thesis, per sector."""
-    thesis = thesis_log_ratio()
-    end = thesis["Date"].max()
-
-    left = replication[replication["Date"] == end]
-    right = thesis[thesis["Date"] == end]
-    merged = left.merge(right, on=["Scenario", "Component", "Sector", "Date"], how="inner")
-    merged = merged[merged["Scenario"].isin(THESIS_SCENARIOS)]
-    return merged.rename(columns={"LogRatio": "LogRatioReplication"})
-
-
-def energy_sign_check(merged):
-    """
-    Does the Energy sign reversal survive the replication?
-
-    In the thesis the transition component of Energy is positive under Net Zero
-    and Delayed transition and negative under the other three scenarios.
-    """
-    energy = merged[(merged["Sector"] == "ENRG") & (merged["Component"] == "transition")]
-    energy = energy.set_index("Scenario")
-    rows = []
-    for scenario in THESIS_SCENARIOS:
-        if scenario not in energy.index:
-            continue
-        thesis_value = energy.loc[scenario, "LogRatioThesis"]
-        replication_value = energy.loc[scenario, "LogRatioReplication"]
-        rows.append(
-            {
-                "Scenario": scenario,
-                "Thesis": round(float(thesis_value), 4),
-                "Replication": round(float(replication_value), 4),
-                "SameSign": bool(np.sign(thesis_value) == np.sign(replication_value)),
-            }
-        )
-    return pd.DataFrame(rows)
-
-
 def main():
-    # The projection uses FIT B, the 237-month refit, as s3_K62_leaf10.m does.
-    # FIT A stops in 2020 and is only there to certify the out-of-sample metrics.
+    # The projection uses the 237-month window. The 189-month fit exists only to
+    # score the sealed block and is not used here.
     data = train_for_projection()
-    print(f"FIT B: {data['x_fit'].shape[0]} rows = 22 x "
-          f"{data['x_fit'].shape[0] // 22} months, {VARIANTS[data['variant']]}")
+    print(f"{data['x_fit'].shape[0]} rows = 22 x {data['x_fit'].shape[0] // 22} months, "
+          f"{VARIANTS[data['variant']]}")
 
     predictions = predict_scenarios(data["model"], data["x_fit"].columns)
-    replication = log_ratio(predictions)
+    ratio = log_ratio(predictions)
 
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / "replication_logratio_green_brown.csv"
-    replication.to_csv(out, index=False)
+    out = RESULTS / "scenario_logratio.csv"
+    ratio.to_csv(out, index=False)
+    print(f"Wrote {out.relative_to(Path(__file__).resolve().parents[1])} ({len(ratio)} rows)")
 
-    merged = comparison_2050(replication)
-    comparison_out = RESULTS / "replication_logratio_2050_comparison.csv"
-    merged.to_csv(comparison_out, index=False)
+    end = ratio["Date"].max()
+    energy = ratio[
+        (ratio["Sector"] == "ENRG")
+        & (ratio["Component"] == "transition")
+        & (ratio["Date"] == end)
+    ].set_index("Scenario")["LogRatio"]
 
-    root = Path(__file__).resolve().parents[1]
-    print(f"Wrote {out.relative_to(root)} ({len(replication)} rows)")
-    print(f"Wrote {comparison_out.relative_to(root)} ({len(merged)} rows)")
-
-    check = energy_sign_check(merged)
-    print("\nEnergy, transition component, December 2050:")
-    print(check.to_string(index=False))
-
-    energy = merged[(merged["Sector"] == "ENRG") & (merged["Component"] == "transition")]
-    spread = float(energy["LogRatioReplication"].max() - energy["LogRatioReplication"].min())
-    thesis_spread = float(energy["LogRatioThesis"].max() - energy["LogRatioThesis"].min())
-    print(f"\nspread across scenarios: {spread:.6f}   thesis {thesis_spread:.6f}")
-
-    deviation = (merged["LogRatioReplication"] - merged["LogRatioThesis"]).abs()
-    print(f"largest deviation at 2050 over {len(merged)} values: {deviation.max():.3e}")
-
-    if not check["SameSign"].all():
-        failed = check.loc[~check["SameSign"], "Scenario"].tolist()
-        print(f"Scenarios whose sign differs from the thesis: {failed}")
+    print(f"\nEnergy, transition component, {end:%B %Y}:")
+    for scenario in SCENARIOS:
+        if scenario in energy.index:
+            print(f"  {scenario:<44}{energy[scenario]:+.6f}")
+    print(f"  {'range across scenarios':<44}{energy.max() - energy.min():.6f}")
 
 
 if __name__ == "__main__":

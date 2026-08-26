@@ -58,6 +58,102 @@ Some files in `results/` are exports that this code does not rebuild; they are l
 
 ---
 
+## Method
+
+The model is a gradient-boosted tree ensemble. This section states how its trees are
+constrained, how its hyper-parameters were chosen, and on which samples it is estimated —
+in that order, because each step depends on the one before.
+
+### Tree growth: a budget on splits, not a depth limit
+
+The trees are grown breadth-first under a budget on the *number of splits*: the tree grows level by
+level, and when a level would overrun the budget, the least productive splits of that level are
+undone.
+
+This is where a naming convention needs spelling out, because it otherwise reads as a contradiction.
+The grid below has an axis called **depth**, taking values 3, 4 and 5, and those values are shorthand
+for split budgets of 7, 15 and 31 — the number of branch nodes a *complete* tree of that depth would
+have, since 1 + 2 + 4 + 8 = 15. The selected value, depth 4, therefore means a budget of **15
+splits**, not a ceiling on how deep a tree may go. The two coincide only when the tree is complete.
+
+On this design they do not coincide. Many nodes cannot be split at all, because an interaction
+column is constant inside them, so a level often uses less than its share of the budget and what is
+left is spent further down. The result is unbalanced trees that reach **depth 12** while still
+holding to 15 splits each. Reading "depth 4" as a depth limit would describe a different and smaller
+model.
+
+[`src/matlab_policy_gb.py`](src/matlab_policy_gb.py) implements this, with an equivalence test that
+pins the convention down: given a budget of `2**d - 1` on data where every node *can* split, it must
+reproduce a depth-`d` tree exactly, which it does at depths 2, 3 and 4.
+
+### Hyperparameter optimization
+
+The configuration used throughout — **learning rate 0.03 with 300 learners, a budget of 15 splits
+per tree, minimum leaf size 10, no subsampling** — is the output of a hyperparameter optimization
+carried out in the thesis. It is not tuned in this repository and it is not hand-picked: the search
+space, the selection criterion and the protocol are all fixed in advance, and are set out here so a
+reader can see what they were.
+
+**Feature selection is settled before the search begins.** A deliberately permissive reference model
+— learning rate 0.01, four leaves, minimum leaf size 10 — is fitted on all 552 candidates, and 101
+of them come out with positive importance. Reading that ranking at 99% of cumulative importance
+gives the smallest top-K window that reaches the threshold, K = 62, to which the thesis adds 23
+forced market terms (contemporaneous ExMkt and its 22 entity interactions, eleven of which fall
+outside the window and are restored). The resulting 73-feature set is fixed from that point on. It
+is chosen before the grid is entered and never revisited afterwards, so the search cannot quietly
+select features and hyper-parameters against the same data.
+
+**Search space.** An exhaustive grid, defined a priori, over
+
+| Axis | Values |
+|---|---|
+| learning rate η | 0.02, 0.03, 0.05, 0.07, 0.10 |
+| number of learners M | tied to η as M = round(900 × 0.01 / η): 450, 300, 180, 129, 90 |
+| tree depth, that is the split budget | 3, 4, 5 — budgets of 7, 15 and 31 splits |
+| minimum leaf size | 5, 8, 10, 12, 15, 20, 30 |
+| subsample rate | 0.5, 0.8, 1.0 |
+
+That is 5 × 3 × 7 × 3 = **315 configurations**. The number of learners is not a free axis: it is
+pinned to the learning rate so that η × M is the same across the grid — 9 in every cell, up to the
+rounding of M — which holds the total amount of learning constant and stops the comparison turning
+into a contest between long slow runs and short fast ones.
+
+**Validation window and selection criterion.** Selection is scored by RMSE on a held-out 24-month
+validation window, in two stages. The first pass scores all 315 configurations — five seeds each for
+the stochastic settings, a single fit for the deterministic ones, which are deterministic precisely
+because subsampling is off. The finalists are then re-scored over 30 seeds, so that a configuration
+cannot win on a lucky initialisation: the second stage separates the signal from initialisation
+variance.
+
+**Sealed test set.** The 2021–2024 block takes no part in any of this. It is not used to score
+candidates, not used to pick finalists, and not consulted between stages. The selected configuration
+is refitted on the 189 training months and evaluated against that block exactly once, which is what
+makes the reported out-of-sample figures an out-of-sample result rather than a selection statistic.
+
+Once selected, these values are fixed. Nothing downstream re-optimizes them: the projection changes
+the estimation sample and nothing else, as the next section describes.
+
+### Two estimation windows
+
+The same configuration is estimated twice, on two different samples, because the two answer
+different questions.
+
+The **189-month window**, running to December 2020, is the one that carries the out-of-sample
+metrics: it stops before the sealed block, so the 2021–2024 figures are a genuine out-of-sample
+result. The **237-month window**, running to December 2024, is the one that carries the 2025–2050
+projection. Appendix A.3 of the thesis sets out the reason: the scenario anchors are recomputed on
+the same window as the estimation, so each configuration is internally consistent, and projecting
+from a model that stops in 2020 would leave four years of realised data unused. The two are kept
+apart in the code as well — `prepare_fit_a` and `prepare_fit_b` in
+[`src/train_gb.py`](src/train_gb.py) — and the projection calls the second.
+
+**The risk-free path.** The projection compounds the total return, `yhat + RF`, not the excess
+return. The scenario design file carries no risk-free column, so the path is joined from the
+scenario predictions in `results/`, where RF is constant across entities within a scenario,
+component and month.
+
+---
+
 ## 1. Why machine learning is necessary, not decorative
 
 The linear panel cannot answer the research question, by construction. In that specification Green
@@ -80,7 +176,7 @@ agree column by column, with a maximum absolute difference of 0.
 ![Out-of-sample R2 by model](figures/fig_model_comparison.png)
 
 The four models are nearly tied out-of-sample: Elastic Net 0.389, Random Forest 0.401, Panel 0.404,
-Gradient Boosting 0.406. A gap of 0.017 across four very different specifications is not a ranking.
+Gradient Boosting 0.407. A gap of 0.018 across four very different specifications is not a ranking.
 
 The choice was made by progressive elimination on four criteria:
 
@@ -91,9 +187,10 @@ The choice was made by progressive elimination on four criteria:
 | Determinism | rules out Random Forest |
 | Parsimony | 73 features against 155 |
 
-Gradient Boosting is the only model not dominated on any of the four. Its configuration — 73
-features, depth 4, learning rate 0.03, 300 trees, no subsampling — comes from the thesis and is
-refit here without any further tuning. Fit is confirmation, not reason.
+Gradient Boosting is the only model not dominated on any of the four. Its configuration — the
+73-feature set, learning rate 0.03 with 300 learners, a budget of 15 splits per tree, minimum leaf
+size 10, no subsampling — is the one described under [Method](#method). Fit is confirmation, not
+reason.
 
 **Gradient Boosting, fitted on the 189 estimation months and scored on the sealed 2021–2024 block:**
 
@@ -148,6 +245,11 @@ pathways put the green leg ahead. In the transition component at 2050, Net Zero 
 transition +0.16 are both positive; NDCs −0.70, Below 2°C −0.82 and Fragmented World −0.93 are
 below them.
 
+The physical panel of the Energy figure is the other half of the finding, and it is kept there on
+purpose: under that component the five scenarios lie exactly on top of each other. The Energy spread
+across scenarios is 0.00 for physical against 1.22 for transition. All of the separation is
+transition risk.
+
 The ordering is not a simple ranking of ambition. It takes ambition *and* speed together: Net Zero
 and Delayed transition have both, Below 2°C has ambition without speed, Fragmented World has speed
 without ambition, NDCs has neither. Net Zero sits at the green extreme and Delayed transition beside
@@ -160,92 +262,11 @@ should a reader of this repository: the result to take away is which pathways pu
 ahead, not that Energy inverts its sign — the latter is a description of this particular fit rather
 than a property of the sector.
 
-The left panel is the other half of the finding, and it is kept in the figure on purpose: under the
-physical component the five scenarios lie exactly on top of each other. The Energy spread across
-scenarios is 0.00 for physical against 1.22 for transition. All of the separation is transition
-risk.
-
 ![Materials trajectories](figures/fig_materials_trajectories.png)
 
 Materials behaves differently. The brown leg is ahead under every pathway; only the size of the gap
 changes, from −1.67 under Net Zero (tightest) to −2.62 under NDCs (widest). The shock enters as a
 cost rather than as an advantage: green does not become better, it becomes less bad.
-
-### Two estimation windows
-
-The same configuration is estimated twice, on two different samples, because the two answer
-different questions.
-
-The **189-month window**, running to December 2020, is the one that carries the out-of-sample
-metrics: it stops before the sealed block, so the 2021–2024 figures are a genuine out-of-sample
-result. The **237-month window**, running to December 2024, is the one that carries the 2025–2050
-projection. Appendix A.3 of the thesis sets out the reason: the scenario anchors are recomputed on
-the same window as the estimation, so each configuration is internally consistent, and projecting
-from a model that stops in 2020 would leave four years of realised data unused. The two are kept
-apart in the code as well — `prepare_fit_a` and `prepare_fit_b` in
-[`src/train_gb.py`](src/train_gb.py) — and the projection calls the second.
-
-**The tree growth policy.** The trees are grown breadth-first under a budget of 15 splits: the tree
-grows level by level, and when a level would overrun the budget, the least productive splits of that
-level are undone. That is a constraint on the *number of splits*, not on depth, and it coincides
-with a depth limit of 4 only for a complete tree, since 1 + 2 + 4 + 8 = 15 branch nodes. On this
-design the trees are not complete — many nodes cannot be split because an interaction column is
-constant inside them — so the budget is spent deeper instead, reaching depth 12.
-[`src/matlab_policy_gb.py`](src/matlab_policy_gb.py) implements this, with an equivalence test that
-pins it down: given a budget of `2**d - 1` on data where every node can split, it must reproduce a
-depth-`d` tree exactly, which it does at depths 2, 3 and 4.
-
-**The risk-free path.** The projection compounds the total return, `yhat + RF`, not the excess
-return. The scenario design file carries no risk-free column, so the path is joined from the
-scenario predictions in `results/`, where RF is constant across entities within a scenario,
-component and month.
-
-### Hyperparameter optimization
-
-The four values quoted above — depth 4, learning rate 0.03, 300 trees, minimum leaf size 10 — are
-the output of a hyperparameter optimization carried out in the thesis. They are not tuned in this
-repository, and they are not hand-picked: the procedure, its search space and its selection
-criterion are all fixed in advance, and are recorded here so that a reader can see which they are.
-
-**Feature selection is settled before the search begins.** A deliberately permissive reference model
-— learning rate 0.01, four leaves, minimum leaf size 10 — is fitted on all 552 candidates, and 101
-of them come out with positive importance. Reading that ranking at 99% of cumulative importance
-gives the smallest top-K window that reaches the threshold, K = 62, to which the thesis adds 23
-forced market terms (contemporaneous ExMkt and its 22 entity interactions, eleven of which fall
-outside the window and are restored). The resulting 73-feature set is fixed from that point on. It
-is chosen before the grid is entered and never revisited afterwards, so the search cannot quietly
-select features and hyper-parameters against the same data.
-
-**Search space.** An exhaustive grid, defined a priori, over
-
-| Axis | Values |
-|---|---|
-| learning rate η | 0.02, 0.03, 0.05, 0.07, 0.10 |
-| number of learners M | tied to η as M = round(900 × 0.01 / η): 450, 300, 180, 129, 90 |
-| tree depth | 3, 4, 5 |
-| minimum leaf size | 5, 8, 10, 12, 15, 20, 30 |
-| subsample rate | 0.5, 0.8, 1.0 |
-
-That is 5 × 3 × 7 × 3 = **315 configurations**. The number of learners is not a free axis: it is
-pinned to the learning rate so that η × M is the same across the grid — 9 in every cell, up to the
-rounding of M — which holds the total amount of learning constant and stops the comparison turning
-into a contest between long slow runs and short fast ones.
-
-**Validation window and selection criterion.** Selection is scored by RMSE on a held-out 24-month
-validation window, in two stages. The first pass scores all 315 configurations — five seeds each for
-the stochastic settings, a single fit for the deterministic ones, which are deterministic precisely
-because subsampling is off. The finalists are then re-scored over 30 seeds, so that a configuration
-cannot win on a lucky initialisation: the second stage separates the signal from initialisation
-variance.
-
-**Sealed test set.** The 2021–2024 block takes no part in any of this. It is not used to score
-candidates, not used to pick finalists, and not consulted between stages. The selected configuration
-is refitted on the 189 training months and evaluated against that block exactly once, which is what
-makes the reported out-of-sample figures an out-of-sample result rather than a selection statistic.
-
-**Refit for the projection.** For the 2025–2050 projection the same hyper-parameters are held fixed
-and only the estimation sample changes, to the full 237 months. Appendix A.3 of the thesis describes
-that refit and the reason for it. No re-optimization happens on the longer window.
 
 ### Mean 2025–2050 differences by sector and scenario
 
