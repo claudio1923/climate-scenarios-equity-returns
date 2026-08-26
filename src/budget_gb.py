@@ -1,39 +1,37 @@
 """
-Least-squares boosting with MATLAB's tree growth policy, implemented in numpy.
+Least-squares boosting with a budget on the number of splits per tree.
 
-Why this exists
----------------
-MATLAB's `MaxNumSplits` is a budget on the NUMBER OF SPLITS, not a depth limit,
-and the tree is grown breadth-first. The documented procedure is:
+Growth policy
+-------------
+Trees are grown breadth-first under a budget, not to a depth limit:
 
-  1. grow level by level (a level is the set of nodes equidistant from the root);
+  1. grow level by level, a level being the nodes equidistant from the root;
   2. split every splittable node of the current level;
-  3. count branch nodes: if the total exceeds MaxNumSplits, rank the branches OF
-     THAT LEVEL by impurity gain and undo the least productive splits until the
-     budget is met;
+  3. count branch nodes: if the total exceeds the budget, rank the branches of
+     that level by impurity gain and undo the least productive ones;
   4. move to the next level. Stop when the budget is exhausted, no split in the
-     level improves, or MinLeafSize / MinParentSize block every node.
+     level improves, or the leaf and parent size constraints block every node.
 
-`MaxNumSplits = 15` therefore coincides with `max_depth = 4` only for a complete
-tree (1 + 2 + 4 + 8 = 15 branch nodes). When trees are incomplete the budget is
-not used up, and MATLAB keeps descending to level 5 and beyond with the splits
-that are left over. scikit-learn offers neither policy: `max_depth` truncates by
-depth, `max_leaf_nodes` switches to best-first growth. Hence this builder.
+A budget of 15 splits coincides with a depth limit of 4 only for a complete
+tree, since 1 + 2 + 4 + 8 = 15 branch nodes. When trees are incomplete the
+budget is not used up at depth 4 and growth continues deeper, which is why the
+trees here reach depth 12 while still holding to 15 splits each. scikit-learn
+offers neither policy: max_depth truncates by depth, max_leaf_nodes switches to
+best-first growth. Hence this module.
 
 What is exact and what is a choice
 ----------------------------------
-Exact, from the documented procedure: breadth-first growth, the split budget,
-the per-level undo rule, the MSE gain criterion, midpoint thresholds, the leaf
-and parent size constraints.
+Fixed by the policy: breadth-first growth, the split budget, the per-level undo
+rule, the MSE gain criterion, midpoint thresholds, the leaf and parent size
+constraints.
 
-A choice, because the documentation does not pin it down: the tie-break used
-when two candidate splits have exactly equal gain. Two rules are involved and
-both are parameters here, so the effect can be measured rather than assumed:
-  - within a node, across columns: the lower column index wins (a strictly
-    greater gain is required to displace the current best), which is what
-    scikit-learn does;
+A choice, because nothing pins it down: the tie-break when two candidate splits
+have exactly equal gain. Two rules are involved and both are parameters here, so
+the effect can be measured rather than assumed:
+  - within a node, across columns: the lower column index wins, a strictly
+    greater gain being required to displace the current best;
   - across nodes of a level, when the budget forces an undo: the lower node
-    index (leftmost) wins among equal gains.
+    index wins among equal gains.
 """
 
 import numpy as np
@@ -192,7 +190,7 @@ def _best_split_in_node(X, y, mask, order, min_leaf, min_parent):
 
 
 def build_tree(X, y, order, max_splits, min_leaf, min_parent):
-    """Grow one tree with the MATLAB policy: breadth-first under a split budget."""
+    """Grow one tree: breadth-first, under the split budget."""
     n_rows = X.shape[0]
     tree = Tree()
 
@@ -254,9 +252,9 @@ def build_tree(X, y, order, max_splits, min_leaf, min_parent):
     return tree.finalise()
 
 
-class MatlabPolicyGB:
+class BudgetGB:
     """
-    LSBoost with the MATLAB growth policy.
+    Least-squares boosting under the split-budget growth policy.
 
         F_0 = mean(y)
         F_m = F_{m-1} + learning_rate * h_m,  h_m fitted to the residual

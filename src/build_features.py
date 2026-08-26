@@ -13,7 +13,7 @@ The candidate ordering is fixed and must match feature_names_full552.csv:
     index 24 + (j-1)*22 + e          -> driver j interacted with entity e
 
 Running this file as a script performs the mandatory validation against
-X_trval_K62_reference.csv, the design matrix built in MATLAB.
+X_trval_K62_reference.csv, the reference design matrix.
 
 Every read passes float_precision="round_trip". The default pandas parser is
 fast rather than correctly rounded and shifts values by about 1e-14, which is
@@ -128,7 +128,7 @@ def split_frames(panel):
     Split the panel into fit sample (tr70 + va10) and sealed test block.
 
     The fit sample is ordered tr70 first, then va10: this is the row order of
-    the MATLAB reference matrix, so the validation below compares like with like.
+    the reference matrix, so the validation below compares like with like.
     """
     fit = pd.concat(
         [panel[panel["Split"] == s] for s in TRAIN_SPLITS], ignore_index=True
@@ -140,7 +140,7 @@ def split_frames(panel):
 def validate_against_reference(verbose=True):
     """
     Mandatory check: the Python design matrix on tr70 + va10 must reproduce the
-    MATLAB one, column by column. Raises if any column diverges.
+    reference one, column by column. Raises if any column diverges.
     """
     panel = load_panel()
     fit, _ = split_frames(panel)
@@ -150,9 +150,9 @@ def validate_against_reference(verbose=True):
 
     # Row alignment: the reference carries Y and Entity, use them as a key check.
     if not np.allclose(fit["Y"].to_numpy(), reference["Y"].to_numpy()):
-        raise ValueError("Row order mismatch: Y does not align with the MATLAB reference.")
+        raise ValueError("Row order mismatch: Y does not align with the reference matrix.")
     if not (fit["Entity"].to_numpy() == reference["Entity"].to_numpy()).all():
-        raise ValueError("Row order mismatch: Entity does not align with the MATLAB reference.")
+        raise ValueError("Row order mismatch: Entity does not align with the reference matrix.")
 
     reference_features = reference[built.columns.tolist()]
     per_column = np.abs(built.to_numpy() - reference_features.to_numpy()).max(axis=0)
@@ -162,13 +162,13 @@ def validate_against_reference(verbose=True):
     if diverging:
         report = "\n".join(f"  {c}: max abs diff {m:.3e}" for c, m in diverging)
         raise ValueError(
-            f"Feature construction does not match the MATLAB reference in "
+            f"Feature construction does not match the reference matrix in "
             f"{len(diverging)} column(s):\n{report}"
         )
 
     if verbose:
         print(f"Validation OK: {built.shape[1]} columns, {built.shape[0]} rows "
-              f"(tr70 + va10), max abs difference vs MATLAB = {per_column.max():.3e}")
+              f"(189 estimation months), max abs difference = {per_column.max():.3e}")
     return float(per_column.max())
 
 

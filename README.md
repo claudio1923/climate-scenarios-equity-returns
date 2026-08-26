@@ -32,7 +32,7 @@ src/
   evaluate.py         out-of-sample R2 and RMSE on the sealed test block
   interpret.py        PDP and ICE curves for the six defence pairs
   scenarios.py        2025-2050 projection and Green/Brown log-ratio
-  matlab_policy_gb.py least-squares boosting in numpy, with breadth-first tree
+  budget_gb.py        least-squares boosting in numpy, with breadth-first tree
                       growth under a budget on the number of splits
 scripts/
   make_figures.py     regenerates everything in figures/
@@ -82,7 +82,7 @@ left is spent further down. The result is unbalanced trees that reach **depth 12
 holding to 15 splits each. Reading "depth 4" as a depth limit would describe a different and smaller
 model.
 
-[`src/matlab_policy_gb.py`](src/matlab_policy_gb.py) implements this, with an equivalence test that
+[`src/budget_gb.py`](src/budget_gb.py) implements this, with an equivalence test that
 pins the convention down: given a budget of `2**d - 1` on data where every node *can* split, it must
 reproduce a depth-`d` tree exactly, which it does at depths 2, 3 and 4.
 
@@ -171,14 +171,17 @@ the final evaluation.
 reference design matrix shipped with the private inputs: on the 189-month estimation sample the two
 agree column by column, with a maximum absolute difference of 0.
 
-## 2. Model selection by four criteria, not by R²
+## 2. Model selection by four criteria, not by R² alone
 
 ![Out-of-sample R2 by model](figures/fig_model_comparison.png)
 
-The four models are nearly tied out-of-sample: Elastic Net 0.389, Random Forest 0.401, Panel 0.404,
-Gradient Boosting 0.407. A gap of 0.018 across four very different specifications is not a ranking.
+Out-of-sample fit is the first thing to look at, and it does part of the job: it establishes that
+all four candidates are viable, none of them failing outright. What it cannot do is separate them.
+Elastic Net 0.389, Random Forest 0.401, Panel 0.404, Gradient Boosting 0.407 — a spread of 0.018
+across four very different specifications is a near-tie, not a ranking, and choosing the top of
+such a list would be reading noise.
 
-The choice was made by progressive elimination on four criteria:
+Four further criteria do the separating, by progressive elimination:
 
 | Criterion | Consequence |
 |---|---|
@@ -189,8 +192,8 @@ The choice was made by progressive elimination on four criteria:
 
 Gradient Boosting is the only model not dominated on any of the four. Its configuration — the
 73-feature set, learning rate 0.03 with 300 learners, a budget of 15 splits per tree, minimum leaf
-size 10, no subsampling — is the one described under [Method](#method). Fit is confirmation, not
-reason.
+size 10, no subsampling — is the one described under [Method](#method). Fit gets a candidate onto
+the shortlist; it does not decide which one leaves it.
 
 **Gradient Boosting, fitted on the 189 estimation months and scored on the sealed 2021–2024 block:**
 
@@ -228,10 +231,11 @@ Both curves follow the sweep logic the interaction design requires: a feature li
 is non-zero only on the rows of its own entity, so the grid is applied to those rows and the
 predictions averaged over them.
 
-The falsification test is the pivot between two sectors. Communication carries the heaviest
-interaction budget — 24% of it, of which 13.8 sits on temperature — and it barely separates the
-scenarios (range 0.11). Energy carries less — 16%, of which 14.3 sits on fuel — and it separates
-everything (range 0.39). The reason is not in the model but in the drivers: temperature paths do
+The falsification test is the pivot between two sectors. Shares below are of the interaction budget,
+the 23.2% of total importance that the interaction terms hold between them. Communication carries
+the heaviest share of it — 24%, of which 13.8 percentage points sit on temperature — and it barely
+separates the scenarios (range 0.11). Energy carries less — 16%, of which 14.3 percentage points sit
+on fuel, so nearly all of its share rides on one driver — and it separates everything (range 0.39). The reason is not in the model but in the drivers: temperature paths do
 not diverge across scenarios by 2050, fuel paths do. What matters is the channel, not the weight.
 When the model does not separate, it is because the driver does not separate. Interactions take
 23.2% of the total importance budget, the complement of the 76.8% held by the aggregate terms.
@@ -265,7 +269,8 @@ than a property of the sector.
 ![Materials trajectories](figures/fig_materials_trajectories.png)
 
 Materials behaves differently. The brown leg is ahead under every pathway; only the size of the gap
-changes, from −1.67 under Net Zero (tightest) to −2.62 under NDCs (widest). The shock enters as a
+changes. In the transition component at 2050, the cumulative log-ratio runs from −1.67 under Net
+Zero (tightest) to −2.62 under NDCs (widest). The shock enters as a
 cost rather than as an advantage: green does not become better, it becomes less bad.
 
 ### Mean 2025–2050 differences by sector and scenario

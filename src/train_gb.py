@@ -25,7 +25,7 @@ grid means by depth 4: a complete tree of depth 4 has 1 + 2 + 4 + 8 = 15 branch
 nodes. The trees here are not complete, so the budget is spent deeper and they
 reach depth 12. scikit-learn has neither policy - max_depth bounds the depth
 rather than the count, max_leaf_nodes switches to best-first growth - so the
-default is the numpy builder in matlab_policy_gb.py. The two scikit-learn
+default is the numpy builder in budget_gb.py. The two scikit-learn
 variants stay reachable by name for anyone who wants to see what a different
 constraint does.
 
@@ -47,7 +47,7 @@ from build_features import (
     load_panel,
     split_frames,
 )
-from matlab_policy_gb import MatlabPolicyGB
+from budget_gb import BudgetGB
 
 FIT_A_SPLITS = ("tr70", "va10")
 FIT_B_SPLITS = ("tr70", "va10", "test")
@@ -56,7 +56,7 @@ FIT_B_SPLITS = ("tr70", "va10", "test")
 LEARNING_RATE = 0.03
 N_ESTIMATORS = 300
 MIN_LEAF = 10
-MIN_PARENT = 20  # MATLAB: max(MinParentSize, 2 * MinLeafSize)
+MIN_PARENT = 20  # a parent must be able to yield two leaves of MIN_LEAF
 MAX_SPLITS = 15  # MaxNumSplits
 
 # scikit-learn settings shared by the two diagnostic variants.
@@ -71,10 +71,10 @@ GB_PARAMS = dict(
     random_state=42,
 )
 
-DEFAULT_VARIANT = "matlab_policy"
+DEFAULT_VARIANT = "budget"
 
 VARIANTS = {
-    "matlab_policy": "numpy builder, level-wise under a 15-split budget",
+    "budget": "numpy builder, level-wise under a 15-split budget",
     "sklearn_depth4": "scikit-learn max_depth=4, level-wise truncated at depth 4",
     "sklearn_bestfirst": "scikit-learn max_leaf_nodes=16, best-first",
 }
@@ -82,8 +82,8 @@ VARIANTS = {
 
 def build_model(variant=DEFAULT_VARIANT):
     """An unfitted model for one of the three growth policies."""
-    if variant == "matlab_policy":
-        return MatlabPolicyGB(
+    if variant == "budget":
+        return BudgetGB(
             max_splits=MAX_SPLITS,
             min_leaf=MIN_LEAF,
             min_parent=MIN_PARENT,
@@ -107,7 +107,7 @@ def _stack(panel, splits):
     """
     Stack the requested splits in block order.
 
-    tr70 first, then va10, then test: this is the row order of the MATLAB design
+    tr70 first, then va10, then test: this is the row order of the reference design
     matrices, and build_features validates against it.
     """
     return pd.concat([panel[panel["Split"] == s] for s in splits], ignore_index=True)
@@ -170,7 +170,7 @@ def feature_importance(model, feature_names, x=None, y=None):
     The numpy builder does not store the gains, so it replays the splits and
     needs the sample back; scikit-learn keeps them on the fitted estimator.
     """
-    if isinstance(model, MatlabPolicyGB):
+    if isinstance(model, BudgetGB):
         if x is None or y is None:
             raise ValueError("the numpy builder needs the fitting sample to replay the splits")
         values = model.feature_importance(np.asarray(x, dtype=float), np.asarray(y, dtype=float))
