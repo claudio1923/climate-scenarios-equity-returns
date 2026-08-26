@@ -247,43 +247,6 @@ makes the reported out-of-sample figures an out-of-sample result rather than a s
 and only the estimation sample changes, to the full 237 months. Appendix A.3 of the thesis describes
 that refit and the reason for it. No re-optimization happens on the longer window.
 
-### Reading a CSV is not free
-
-The private inputs are CSV exports of double-precision numbers, and getting them back intact takes
-two separate precautions. Neither is sufficient alone:
-
-| Written with | Read with | Deviation from the original values |
-|---|---|---|
-| default precision | default parser | 4.97e-14 |
-| default precision | `float_precision="round_trip"` | 4.97e-14 |
-| `%.17g` | default parser | 1.42e-14 |
-| **`%.17g`** | **`float_precision="round_trip"`** | **0** |
-
-A file written at default precision simply does not carry enough digits, so no parser can recover
-the original values. A file written with `%.17g` does carry them, but pandas' default CSV parser is
-fast rather than correctly rounded and puts about 1e-14 back in. Both precautions together give an
-exact round-trip, and [`scripts/reexport_data_private.py`](scripts/reexport_data_private.py) applies
-the first while every reader in `src/` applies the second.
-
-A deviation of 5e-14 sounds like something to ignore. On this model it is not. Feeding the pipeline
-the same inputs written at default precision, and leaving everything else untouched, moves the
-Energy 2050 transition differential by this much:
-
-| Scenario | exact inputs | default-precision inputs | shift |
-|---|---|---|---|
-| Net Zero 2050 | +0.2854 | +0.5916 | +0.3062 |
-| Delayed transition | +0.1644 | +0.4268 | +0.2624 |
-| Below 2°C | −0.8242 | −0.7346 | +0.0896 |
-| NDCs | −0.7012 | −0.6245 | +0.0767 |
-| Fragmented World | −0.9345 | −0.8716 | +0.0630 |
-| **range across scenarios** | **1.2199** | **1.4631** | **+0.2432** |
-
-The reason is in the shape of the model rather than in the size of the error. A boosted tree is a
-step function, and the projected fuel path over 2025–2050 spans about three per cent of the range
-the model was trained on. Over an interval that narrow, whether a step edge falls inside it decides
-the level of the answer, and a perturbation in the fourteenth decimal is enough to move an edge
-across. The ranking of the scenarios survives; the levels move by up to 0.31.
-
 ### Mean 2025–2050 differences by sector and scenario
 
 Average over 2025–2050 of the monthly difference between the predicted return of the Green and the
@@ -370,7 +333,9 @@ the NGFS paths. The design of the projection gives a second reason for the same 
 projected fuel path over 2025–2050 spans roughly 0.04 to 1.85, about three per cent of the range the
 model was trained on and sitting close to its median. A boosted tree is a step function, so over an
 interval that narrow the level of the answer depends on whether a step edge happens to fall inside
-it, while the ranking across scenarios does not.
+it, while the ranking across scenarios does not. The practical consequence is that the ordering of
+the pathways carries the finding and the absolute levels do not: which scenarios put the green leg
+ahead is the result, and by how much is not a calibrated quantity.
 
 **The two scenario-sensitive sectors depend on the design.** A richer model might find others.
 Communication hints at why: its interaction budget sits on temperature, which does not separate

@@ -48,6 +48,9 @@ THESIS_SCENARIOS = [
 
 def load_design():
     """Scenario design: keys plus the 73 winning features, already built."""
+    # float_precision="round_trip" is required, not cosmetic: the default parser
+    # is fast rather than correctly rounded and shifts values by about 1e-14,
+    # which is enough to move a split threshold and with it the projection.
     design = pd.read_csv(_require(DATA / "scenario_design_K62.csv"), float_precision="round_trip")
     design["Date"] = pd.to_datetime(design["Date"], format="%d-%b-%Y")
     design["Sector"] = design["EntityLabel"].str.rsplit("_", n=1).str[0]

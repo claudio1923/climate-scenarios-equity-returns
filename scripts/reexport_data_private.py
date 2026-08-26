@@ -3,12 +3,13 @@ Re-export the private CSVs from the MATLAB .mat files at full double precision.
 
 Why
 ---
-The CSVs in data_private/ were written with the default text precision, so
-parsing them back gives values that differ from the MATLAB doubles by about
-5e-14. That looks harmless and is not: feeding the 237-month fit from the CSVs
-gives an Energy 2050 spread of 1.4631, feeding it from the .mat gives 1.219885.
-The projection is sensitive enough that a perturbation in the fourteenth decimal
-moves it by twenty per cent, so the exported precision has to be exact.
+CSVs written at the default text precision do not carry enough digits to
+reconstruct the doubles they came from: the values come back about 5e-14 off.
+That looks harmless and is not. The model is a step function projected over a
+driver range about three per cent as wide as the one it was trained on, so a
+perturbation in the fourteenth decimal is enough to move a split threshold across
+that interval. Measured on this pipeline, it shifts the Energy 2050 differential
+by up to 0.31 and widens the range across scenarios from 1.22 to 1.46.
 
 Two things are needed for an exact round-trip, and neither is sufficient alone:
 

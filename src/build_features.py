@@ -50,6 +50,9 @@ def _require(path):
 
 def load_panel():
     """Load the monthly panel and parse dates. One row = one portfolio-month."""
+    # float_precision="round_trip" is required, not cosmetic: the default parser
+    # is fast rather than correctly rounded and shifts values by about 1e-14,
+    # which is enough to move a split threshold and with it the projection.
     panel = pd.read_csv(_require(DATA / "training_panel.csv"), float_precision="round_trip")
     panel["Date"] = pd.to_datetime(panel["Date"], format="%d-%b-%Y")
     return panel
