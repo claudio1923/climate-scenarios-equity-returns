@@ -388,15 +388,14 @@ figures in `figures/`. The code in `src/` is therefore readable end to end but n
 `data_private/`; every module fails with an explicit message pointing to this section when an input
 file is missing.
 
-Most of what is in `results/` is written by the code in `src/`. Four files are not, and they fall
+Most of what is in `results/` is written by the code in `src/`. Three files are not, and they fall
 into two groups.
 
 **Results this code does not produce.** `scenario_monthly_predictions.csv` carries the scenario
 risk-free path, which is an input to the projection rather than something the model derives, and
 `src/scenarios.py` reads it from there. `oos_model_comparison.csv` holds the four-model comparison;
 the Elastic Net, Random Forest and panel specifications are not estimated in this repository, so
-their figures could not be regenerated here. `en_metrics.csv` records the Elastic Net fit in more
-detail and is kept alongside it.
+their figures could not be regenerated here.
 
 **Input to the trajectory figures.** `logratio_green_brown.csv` is the monthly Green/Brown log-ratio
 in wide form, and it is what `scripts/make_figures.py` draws the Energy and Materials panels from.
