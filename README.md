@@ -343,23 +343,33 @@ that put the green leg ahead are the ones combining ambition with speed.
 
 ## Limitations and future work
 
-**Why the gains over the linear benchmark are modest.** Most of the predictable variance comes from
-the contemporaneous market factor, which is linear, so the ceiling for improvement was low by
-construction of the problem. Monthly equity returns have a very low signal-to-noise ratio, and
-roughly 190 effective training months limit what trees can learn — consistent with what Gu, Kelly
-and Xiu report for machine learning in asset pricing. Machine learning was chosen here for
-expressiveness, not for fit: the linear model cannot even represent a scenario-dependent
-differential, by construction. R² measures total-return prediction, while the object of interest is
-a second-order differential that R² barely sees.
+The predictive gains of the nonlinear models over a well-specified linear benchmark are moderate,
+and the contribution lies elsewhere: in the conditional, within-sector mapping from climate policy
+to the Green–Brown differential, and in the finding that this differential, where it responds at
+all, responds through the price of fossil fuels. That is also why the question required the richer
+specification — a linear model cannot represent a scenario-dependent differential at all. Most of
+the predictable variance comes from the contemporaneous market factor, which is linear, so the
+ceiling on fit was set by the problem rather than by the method, and R² measures total-return
+prediction while the object of interest is a second-order differential R² barely sees. The
+constraints that frame the result are these.
 
-**Style factors are excluded.** No scenario path exists for them, so they cannot be projected. The
-within-sector design attenuates the omission but does not remove it.
+**Style factors are excluded.** The omission is less a choice than a constraint of the
+forward-looking design: NGFS projects the macro-financial, energy and climate drivers the model
+relies on, but not size, value, profitability or momentum, and what has no scenario path cannot be
+carried into the projection. Sorting within each sector, which holds industry composition fixed,
+softens the concern without dispelling it.
 
-**The time dimension is narrow from both sides.** The data are monthly while the NGFS scenarios are
-annual, and ESG coverage thins out before 2005.
+**A single ESG provider, and the sample start that follows from it.** Ratings diverge across
+vendors, and the same firm may be scored very differently from one source to the next. Using one
+provider keeps the sorting internally consistent, at the cost of inheriting its particular
+methodology. That same reliance sets the start of the sample, since ESG coverage grows thin before
+the mid-2000s.
 
-**A single ESG provider.** Ratings diverge across providers, and the Green/Brown sorting inherits
-that choice.
+**Data frequency.** The estimation panel was deliberately kept homogeneous and monthly: variables
+available only at low frequency, GDP and emissions among them, were excluded rather than forced
+onto the monthly grid by ad hoc interpolation. The scenario paths, however, arrive at annual steps,
+so projecting forward requires disaggregating them to monthly frequency, which can blur the timing
+of the transition channels even as the annual magnitude of each scenario shift is preserved.
 
 **Scenario paths are smooth by construction.** The NGFS/NiGEM trajectories are smooth, low-volatility
 paths by design, and a model anchored to them inherits that smoothness, so the differentiation across
@@ -368,9 +378,10 @@ of transition dynamics is likely understated. The practical consequence is that 
 pathways carries the finding and the absolute levels do not: which scenarios put the green leg ahead
 is the result, and by how much is not a calibrated quantity.
 
-**The two scenario-sensitive sectors depend on the design.** A richer model might find others.
-Communication hints at why: its interaction budget sits on temperature, which does not separate
-scenarios by 2050.
+**The channel readings rest on a deliberately narrow feature set.** The two scenario-sensitive
+sectors are the two this design can see, and a richer one might find others. Communication hints at
+where to look: its interaction budget sits on temperature, which does not separate the scenarios by
+2050.
 
 **Future work.** Longer or higher-frequency samples; penalised linear models with explicit
 interaction terms as a sharper benchmark; news-based transition-risk indicators alongside physical
