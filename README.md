@@ -73,15 +73,27 @@ in that order, because each step depends on the one before.
 ### Tree growth: a budget on splits, not a depth limit
 
 The trees are grown breadth-first under a budget on the *number of splits* rather than a ceiling on
-depth: a level that would overrun the budget gives up its least productive splits, and what a level
-does not use is spent further down. The grid's **depth** axis — 3, 4, 5 — is shorthand for budgets
-of 7, 15 and 31, the branch nodes of a complete tree of that depth. The selected value, depth 4, is
-a budget of **15 splits**. The two conventions coincide only on a complete tree, and this design is
-far from one: an interaction column is constant inside most nodes, so the trees come out unbalanced,
-reaching **depth 12** on 15 splits each. Reading "depth 4" as a depth limit would describe a
-different and smaller model. [`src/budget_gb.py`](src/budget_gb.py) implements this, with an
-equivalence test that pins the convention down: given a budget of `2**d - 1` on data where every
-node *can* split, it reproduces a depth-`d` tree exactly.
+depth. MATLAB splits branch nodes layer by layer; a layer that would carry the tree past the budget
+has its least successful splits undone, ranked by impurity gain, and a layer that does not use its
+share leaves the remainder to be spent further down
+([`templateTree`](https://www.mathworks.com/help/stats/templatetree.html) documents the procedure,
+whose stated aim is a maximally balanced tree).
+
+The grid's **depth** axis — 3, 4, 5 — is shorthand for budgets of 7, 15 and 31, the branch nodes of
+a complete tree of that depth. The selected value, depth 4, is a budget of **15 splits**, which is
+sixteen leaves whatever shape the tree takes. The two conventions coincide only on a complete tree,
+and this design defeats the balancing: an interaction column is constant inside most nodes, so few
+nodes in a layer can split at all, and the trees come out unbalanced, reaching **depth 12** on 15
+splits each.
+
+Neither of scikit-learn's growth policies reproduces this. `max_depth` caps depth outright and
+carries no split budget; `max_leaf_nodes` reaches the same count but grows best-first, comparing
+every open leaf rather than only those of the current layer. The difference is not cosmetic: each
+tree fits the residuals left by the one before, so one tree grown differently shifts the target of
+all 299 that follow, and the discrepancy compounds rather than averaging out.
+[`src/budget_gb.py`](src/budget_gb.py) therefore implements the policy directly, with an equivalence
+test that pins the convention down: given a budget of `2**d - 1` on data where every node *can*
+split, it reproduces a depth-`d` tree exactly.
 
 ### Hyperparameter optimization
 
@@ -94,11 +106,11 @@ reader can see what they were.
 **Feature selection is settled before the search begins.** A deliberately permissive reference model
 — learning rate 0.01, four leaves, minimum leaf size 10 — is fitted on all 552 candidates, and 101
 of them come out with positive importance. Reading that ranking at 99% of cumulative importance
-gives the smallest top-K window that reaches the threshold, K = 62, to which the thesis adds 23
-forced market terms (contemporaneous ExMkt and its 22 entity interactions, eleven of which fall
-outside the window and are restored). The resulting 73-feature set is fixed from that point on. It
-is chosen before the grid is entered and never revisited afterwards, so the search cannot quietly
-select features and hyper-parameters against the same data.
+gives the smallest top-K window that reaches the threshold, K = 62. The thesis then forces in the
+contemporaneous market terms — ExMkt and its 22 entity interactions, 23 in all — of which 12 already
+sit inside that window, so the remaining 11 are restored: 62 + 11 = **73 features**. The set is
+fixed from that point on, chosen before the grid is entered and never revisited afterwards, so the
+search cannot quietly select features and hyper-parameters against the same data.
 
 **Search space.** An exhaustive grid, defined a priori, over
 
