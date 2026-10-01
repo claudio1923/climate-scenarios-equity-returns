@@ -3,10 +3,9 @@ Re-export the private CSVs from the MATLAB .mat files at full double precision.
 
 Why
 ---
-The model is a step function projected over a driver range about three per cent
-as wide as the one it was trained on, so the inputs have to survive the round
-trip through text exactly: a perturbation in the fourteenth decimal is enough to
-move a split threshold across that interval.
+A boosted tree splits on thresholds, so a value that does not round-trip
+exactly can fall on the other side of a split and change the prediction. The
+inputs therefore have to survive the round trip through text without loss.
 
 Two things are needed for an exact round-trip, and neither is sufficient alone:
 

@@ -361,15 +361,12 @@ annual, and ESG coverage thins out before 2005.
 **A single ESG provider.** Ratings diverge across providers, and the Green/Brown sorting inherits
 that choice.
 
-**Scenario paths are smooth by construction.** The projections should be read as directions of
-adjustment, not as magnitudes, which is the conclusion the thesis reaches from the low volatility of
-the NGFS paths. The design of the projection gives a second reason for the same caution. The
-projected fuel path over 2025–2050 spans roughly 0.04 to 1.85, about three per cent of the range the
-model was trained on and sitting close to its median. A boosted tree is a step function, so over an
-interval that narrow the level of the answer depends on whether a step edge happens to fall inside
-it, while the ranking across scenarios does not. The practical consequence is that the ordering of
-the pathways carries the finding and the absolute levels do not: which scenarios put the green leg
-ahead is the result, and by how much is not a calibrated quantity.
+**Scenario paths are smooth by construction.** The NGFS/NiGEM trajectories are smooth, low-volatility
+paths by design, and a model anchored to them inherits that smoothness, so the differentiation across
+scenarios is better read as a direction of adjustment than as a calibrated magnitude, and the force
+of transition dynamics is likely understated. The practical consequence is that the ordering of the
+pathways carries the finding and the absolute levels do not: which scenarios put the green leg ahead
+is the result, and by how much is not a calibrated quantity.
 
 **The two scenario-sensitive sectors depend on the design.** A richer model might find others.
 Communication hints at why: its interaction budget sits on temperature, which does not separate
