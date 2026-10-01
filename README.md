@@ -72,24 +72,16 @@ in that order, because each step depends on the one before.
 
 ### Tree growth: a budget on splits, not a depth limit
 
-The trees are grown breadth-first under a budget on the *number of splits*: the tree grows level by
-level, and when a level would overrun the budget, the least productive splits of that level are
-undone.
-
-The grid below has an axis called **depth**, taking values 3, 4 and 5; those values are shorthand
-for split budgets of 7, 15 and 31 — the number of branch nodes a *complete* tree of that depth would
-have, since 1 + 2 + 4 + 8 = 15. The selected value, depth 4, is a budget of **15 splits** rather than
-a ceiling on tree depth. The two coincide only when the tree is complete.
-
-On this design they do not coincide. Many nodes cannot be split at all, because an interaction
-column is constant inside them, so a level often uses less than its share of the budget and what is
-left is spent further down. The result is unbalanced trees that reach **depth 12** while still
-holding to 15 splits each. Reading "depth 4" as a depth limit would describe a different and smaller
-model.
-
-[`src/budget_gb.py`](src/budget_gb.py) implements this, with an equivalence test that
-pins the convention down: given a budget of `2**d - 1` on data where every node *can* split, it must
-reproduce a depth-`d` tree exactly, which it does at depths 2, 3 and 4.
+The trees are grown breadth-first under a budget on the *number of splits* rather than a ceiling on
+depth: a level that would overrun the budget gives up its least productive splits, and what a level
+does not use is spent further down. The grid's **depth** axis — 3, 4, 5 — is shorthand for budgets
+of 7, 15 and 31, the branch nodes of a complete tree of that depth. The selected value, depth 4, is
+a budget of **15 splits**. The two conventions coincide only on a complete tree, and this design is
+far from one: an interaction column is constant inside most nodes, so the trees come out unbalanced,
+reaching **depth 12** on 15 splits each. Reading "depth 4" as a depth limit would describe a
+different and smaller model. [`src/budget_gb.py`](src/budget_gb.py) implements this, with an
+equivalence test that pins the convention down: given a budget of `2**d - 1` on data where every
+node *can* split, it reproduces a depth-`d` tree exactly.
 
 ### Hyperparameter optimization
 
