@@ -1,0 +1,5 @@
+Models,R2,RMSE,Feats
+Panel,0.404,5.117,NaN
+ElasticNet,0.389,5.184,34
+RandomForest,0.401,5.132,155
+GradientBoosting,0.406,5.108,73

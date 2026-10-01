@@ -1,0 +1,31 @@
+# Proprietary data - never commit
+data_private/
+highlights_export/
+*.mat
+
+# Per-month projection dumps, ~14 MB each, written by working scripts that are
+# not part of this branch. The MATLAB exports in results/ are NOT covered by
+# this pattern and stay tracked - they cannot be rebuilt without MATLAB.
+results/**/scenario_monthly_fit*.csv
+
+# Common raw-data extensions
+*.nc
+*.xlsx
+*.xls
+*.sav
+*.dta
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+*.egg-info/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
